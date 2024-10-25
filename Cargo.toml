@@ -1,0 +1,19 @@
+[package]
+name = "usbd-gscan"
+description = "A driver for the Geschwister Schneider USB/CAN protocol."
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+[dependencies]
+bitflags = "2.6.0"
+defmt = { version = "0.3", optional = true }
+embedded-can = "0.4.1"
+usb-device = { version = "0.3.2" }
+zerocopy = { version = "0.7.35", features = ["derive"] }
+
+[dev-dependencies]
+usbd-class-tester = "0.3.0"
+
+[features]
+defmt-03 = ["dep:defmt", "usb-device/defmt"]
