@@ -78,8 +78,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     fn control_in(&mut self, xfer: ControlIn<B>) {
         let req = *xfer.request();
 
-        defmt::info!("Control in: {:?}", req);
-
         if req.request_type != control::RequestType::Vendor {
             return;
         }
@@ -119,8 +117,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     // Handle control requests from the host
     fn control_out(&mut self, xfer: ControlOut<B>) {
         let req = *xfer.request();
-
-        defmt::info!("Control out: {:?}", req);
 
         if req.request_type != control::RequestType::Vendor {
             return;
