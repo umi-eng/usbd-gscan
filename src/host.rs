@@ -236,6 +236,20 @@ pub union CanData {
     pub can_fd_timestamp: CanFdTimestamp,
 }
 
+#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[repr(C)]
+pub struct FrameFlag(u8);
+
+bitflags! {
+    impl FrameFlag: u8 {
+        const OVERFLOW = 1 << 0;
+        const FD = 1 << 1;
+        const BIT_RATE_SWITCH = 1 << 2;
+        const ERROR_STATE_INDICATOR = 1 << 3;
+    }
+}
+
 #[derive(Clone, Copy, FromZeroes, FromBytes)]
 #[repr(C)]
 pub struct Frame {
@@ -243,7 +257,7 @@ pub struct Frame {
     pub can_id: u32,
     pub can_dlc: u8,
     pub channel: u8,
-    pub flags: u8,
+    pub flags: FrameFlag,
     pub _reserved0: u8,
     pub can_data: CanData,
 }
