@@ -228,7 +228,6 @@ pub struct CanFdTimestamp {
 }
 
 #[derive(Clone, Copy, FromZeroes, FromBytes)]
-// #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub union CanData {
     pub classic_can: ClassicCan,
@@ -238,7 +237,6 @@ pub union CanData {
 }
 
 #[derive(Clone, Copy, FromZeroes, FromBytes)]
-// #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct Frame {
     pub echo_id: u32,
