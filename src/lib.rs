@@ -53,16 +53,6 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             device,
         }
     }
-
-    pub fn read(&mut self) {
-        let mut data = [0; 64];
-        let res = self.read_endpoint.read(&mut data);
-        match res {
-            Ok(_) => defmt::info!("Read from endpoint"),
-            Err(UsbError::WouldBlock) => {}
-            Err(e) => defmt::error!("{}", e),
-        }
-    }
 }
 
 impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
