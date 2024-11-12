@@ -132,7 +132,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     config.byte_order, 0x0000beef,
                     "Byte order check mismatch. Big endian not currently supported.",
                 );
-                xfer.accept().ok();
+                xfer.accept().unwrap();
             }
             REQ_BIT_TIMING => {
                 let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
@@ -152,7 +152,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     host::Mode::Start => self.device.start(interface),
                 }
 
-                xfer.accept().ok();
+                xfer.accept().unwrap();
             }
             _ => {
                 #[cfg(feature = "defmt-03")]
