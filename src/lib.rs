@@ -43,6 +43,9 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
 impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
     /// Crate a new GsUsb device.
     pub fn new(alloc: &'a UsbBusAllocator<B>, device: D) -> Self {
+        // hack to get the out endpoint number right.
+        let _: EndpointOut<'a, B> = alloc.bulk(64);
+
         Self {
             interface: alloc.interface(),
             write_endpoint: alloc.bulk(64),
