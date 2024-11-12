@@ -8,7 +8,7 @@ use host::DeviceBitTimingConst;
 use host::DeviceConfig;
 use host::DeviceMode;
 use host::DeviceState;
-use host::Flag;
+use host::Feature;
 use host::HostConfig;
 use usb_device::class_prelude::*;
 use zerocopy::AsBytes;
@@ -78,7 +78,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         match req.request {
             REQ_BIT_TIMING_CONST => {
                 let config = DeviceBitTimingConst {
-                    features: Flag::FD,
+                    features: Feature::FD,
                     fclk_can: 8_000_000,
                     bit_timing: host::CanBitTimingConst {
                         tseg1_min: 1,

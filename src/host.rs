@@ -75,7 +75,7 @@ impl TryFrom<u32> for Mode {
 #[repr(C)]
 pub struct DeviceMode {
     pub mode: u32,
-    pub flags: Flag, // todo: bitflags
+    pub flags: Feature,
 }
 
 /// Same as Linux netlink can_state.
@@ -141,10 +141,10 @@ pub struct CanBitTimingConst {
 #[derive(Debug, FromZeroes, FromBytes, AsBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
-pub struct Flag(u32);
+pub struct Feature(u32);
 
 bitflags! {
-    impl Flag: u32 {
+    impl Feature: u32 {
         const LISTEN_ONLY = 1 << 0;
         const LOOP_BACK = 1 << 1;
         const TRIPLE_SAMPLE = 1 << 2;
@@ -167,7 +167,7 @@ bitflags! {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceBitTimingConst {
-    pub features: Flag,
+    pub features: Feature,
     pub fclk_can: u32,
     pub bit_timing: CanBitTimingConst,
 }
@@ -177,7 +177,7 @@ pub struct DeviceBitTimingConst {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceBitTimingConstExtended {
-    pub features: Flag,
+    pub features: Feature,
     pub fclk_can: u32,
     pub bit_timing: CanBitTimingConst,
     pub data_timing: CanBitTimingConst,
