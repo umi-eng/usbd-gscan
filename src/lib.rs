@@ -86,10 +86,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         }
 
         match req.request {
-            REQ_DEVICE_CONFIG => {
-                xfer.accept_with(self.device.device_config().as_bytes())
-                    .unwrap();
-            }
             REQ_BIT_TIMING_CONST => {
                 let config = DeviceBitTimingConst {
                     features: Flag::FD,
@@ -106,6 +102,10 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     },
                 };
                 xfer.accept_with(config.as_bytes()).unwrap();
+            }
+            REQ_DEVICE_CONFIG => {
+                xfer.accept_with(self.device.device_config().as_bytes())
+                    .unwrap();
             }
             REQ_GET_STATE => {
                 xfer.accept_with(self.device.state().as_bytes()).unwrap();
