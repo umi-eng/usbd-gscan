@@ -263,8 +263,6 @@ pub struct Frame {
     pub can_data: CanData,
 }
 
-impl Frame {}
-
 impl embedded_can::Frame for Frame {
     fn new(_id: impl Into<Id>, _data: &[u8]) -> Option<Self> {
         None
