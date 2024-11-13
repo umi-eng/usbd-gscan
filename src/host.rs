@@ -1,6 +1,7 @@
 //! Host interface messages.
 
 use bitflags::bitflags;
+use embedded_can::{ExtendedId, Id, StandardId};
 use zerocopy::{AsBytes, FromBytes, FromZeroes};
 
 /// Tells the device the byte order of the host.
@@ -256,10 +257,54 @@ pub struct Frame {
     pub echo_id: u32,
     pub can_id: u32,
     pub can_dlc: u8,
-    pub channel: u8,
+    pub interface: u8,
     pub flags: FrameFlag,
     pub _reserved0: u8,
     pub can_data: CanData,
+}
+
+impl Frame {}
+
+impl embedded_can::Frame for Frame {
+    fn new(_id: impl Into<Id>, _data: &[u8]) -> Option<Self> {
+        None
+    }
+
+    fn new_remote(_id: impl Into<Id>, _dlc: usize) -> Option<Self> {
+        None
+    }
+
+    fn id(&self) -> Id {
+        let masked = self.can_id & 0x1FFFFFFF;
+        if self.is_extended() {
+            Id::Extended(ExtendedId::new(masked).unwrap())
+        } else {
+            Id::Standard(StandardId::new(masked as u16).unwrap())
+        }
+    }
+
+    fn is_extended(&self) -> bool {
+        const EFF_FLAG: u32 = 0x80000000;
+        (self.can_id & EFF_FLAG) != 0
+    }
+
+    fn is_remote_frame(&self) -> bool {
+        const RTR_FLAG: u32 = 0x40000000;
+        (self.can_id & RTR_FLAG) != 0
+    }
+
+    fn dlc(&self) -> usize {
+        self.can_dlc as usize
+    }
+
+    fn data(&self) -> &[u8] {
+        // safety: underlying type is initialised with zeros and length is given by dlc.
+        if self.flags.intersects(FrameFlag::FD) {
+            unsafe { &self.can_data.can_fd.data[..self.dlc()] }
+        } else {
+            unsafe { &self.can_data.classic_can.data[..self.dlc()] }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
