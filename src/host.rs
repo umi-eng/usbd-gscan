@@ -231,7 +231,7 @@ pub struct CanFdTimestamp {
     pub timestamp_us: u32,
 }
 
-#[derive(Clone, Copy, FromZeroes, FromBytes)]
+#[derive(Clone, Copy, FromZeroes, FromBytes, AsBytes)]
 #[repr(C)]
 pub union CanData {
     pub classic_can: ClassicCan,
@@ -254,7 +254,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, FromZeroes, FromBytes)]
+#[derive(Clone, Copy, FromZeroes, FromBytes, AsBytes)]
 #[repr(C)]
 pub struct Frame {
     pub echo_id: u32,
