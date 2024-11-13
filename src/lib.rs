@@ -151,6 +151,14 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
         }
     }
+
+    fn endpoint_out(&mut self, _addr: EndpointAddress) {
+        let mut buf = [0; core::mem::size_of::<host::Frame>()];
+        if let Ok(_size) = self.read_endpoint.read(&mut buf) {
+            let host_frame = host::Frame::read_from(&buf).unwrap();
+            self.device.receive(host_frame.interface as u16, host_frame);
+        }
+    }
 }
 
 pub trait Device {
@@ -170,4 +178,7 @@ pub trait Device {
 
     /// Returns the device state including TX and RX error counters.
     fn state(&self) -> DeviceState;
+
+    /// Called when a frame is received from the host.
+    fn receive(&mut self, interface: u16, frame: host::Frame);
 }
