@@ -37,7 +37,7 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     interface: InterfaceNumber,
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
-    device: D,
+    pub device: D,
 }
 
 impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
