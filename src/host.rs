@@ -284,13 +284,11 @@ impl embedded_can::Frame for Frame {
     }
 
     fn is_extended(&self) -> bool {
-        const EFF_FLAG: u32 = 0x80000000;
-        (self.can_id & EFF_FLAG) != 0
+        (self.can_id & IdFlag::EXTENDED.bits()) != 0
     }
 
     fn is_remote_frame(&self) -> bool {
-        const RTR_FLAG: u32 = 0x40000000;
-        (self.can_id & RTR_FLAG) != 0
+        (self.can_id & IdFlag::REMOTE.bits()) != 0
     }
 
     fn dlc(&self) -> usize {
@@ -310,12 +308,12 @@ impl embedded_can::Frame for Frame {
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
-pub struct CanIdFlags(u32);
+pub struct IdFlag(u32);
 
 bitflags! {
-    impl CanIdFlags: u32 {
-        const EXT_FRAME = 1 << 31;
-        const REMOTE = 1 << 30;
-        const ERROR = 1 << 29;
+    impl IdFlag: u32 {
+        const EXTENDED = 0x80000000;
+        const REMOTE = 0x40000000;
+        const ERROR = 0x20000000;
     }
 }
