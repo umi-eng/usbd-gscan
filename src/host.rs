@@ -240,6 +240,7 @@ pub union CanData {
     pub can_fd_timestamp: CanFdTimestamp,
 }
 
+/// Frame flags.
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
@@ -247,9 +248,13 @@ pub struct FrameFlag(u8);
 
 bitflags! {
     impl FrameFlag: u8 {
+        /// Receive/transmit overflow.
         const OVERFLOW = 1 << 0;
+        /// FD type frame.
         const FD = 1 << 1;
+        /// FD bit rate switching in use.
         const BIT_RATE_SWITCH = 1 << 2;
+        /// FD error state indicator.
         const ERROR_STATE_INDICATOR = 1 << 3;
     }
 }
@@ -306,6 +311,7 @@ impl embedded_can::Frame for Frame {
     }
 }
 
+/// Identifier flags.
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
@@ -313,8 +319,11 @@ pub struct IdFlag(u32);
 
 bitflags! {
     impl IdFlag: u32 {
+        /// Extended frame.
         const EXTENDED = 0x80000000;
+        /// Remote frame.
         const REMOTE = 0x40000000;
+        /// Error frame.
         const ERROR = 0x20000000;
     }
 }
