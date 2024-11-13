@@ -203,6 +203,7 @@ pub struct DeviceTerminationState {
 #[repr(C)]
 pub struct ClassicCan {
     pub data: [u8; 8],
+    _padding: [u8; 60],
 }
 
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
@@ -211,6 +212,7 @@ pub struct ClassicCan {
 pub struct ClassicCanTimestamp {
     pub data: [u8; 8],
     pub timestamp_us: u32,
+    _padding: [u8; 56],
 }
 
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
@@ -218,6 +220,7 @@ pub struct ClassicCanTimestamp {
 #[repr(C)]
 pub struct CanFd {
     pub data: [u8; 64],
+    _padding: [u8; 4],
 }
 
 #[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
