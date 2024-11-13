@@ -79,7 +79,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             REQ_BIT_TIMING_CONST => {
                 let config = DeviceBitTimingConst {
                     features: Feature::FD,
-                    fclk_can: 8_000_000,
+                    fclk_can: 48_000_000,
                     bit_timing: host::CanBitTimingConst {
                         tseg1_min: 1,
                         tseg1_max: 31,
