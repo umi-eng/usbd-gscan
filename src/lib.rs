@@ -162,6 +162,12 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 }
                 xfer.accept().unwrap();
             }
+            REQ_BIT_TIMING_DATA => {
+                let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
+                let interface = req.value as u8;
+                self.device.device_bit_timing_data(interface, timing);
+                xfer.accept().unwrap();
+            }
             _ => {
                 #[cfg(feature = "defmt-03")]
                 defmt::warn!("Unimplemented request kind: {}", req.request);
@@ -187,6 +193,9 @@ pub trait Device {
 
     /// Called to configure the timing of the CAN interface.
     fn device_bit_timing(&mut self, interface: u8, timing: DeviceBitTiming);
+
+    /// Called to configure the timing of the CAN interface.
+    fn device_bit_timing_data(&mut self, interface: u8, timing: DeviceBitTiming);
 
     /// Called when the host requests an interface is reset.
     fn reset(&mut self, interface: u8);
