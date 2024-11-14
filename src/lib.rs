@@ -118,7 +118,8 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .unwrap();
             }
             REQ_GET_STATE => {
-                xfer.accept_with(self.device.state(req.value).as_bytes())
+                let interface = req.value as u8;
+                xfer.accept_with(self.device.state(interface).as_bytes())
                     .unwrap();
             }
             _ => {
@@ -147,22 +148,18 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
             REQ_BIT_TIMING => {
                 let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
-                let interface = req.value;
-
+                let interface = req.value as u8;
                 self.device.device_bit_timing(interface, timing);
                 xfer.accept().unwrap();
             }
             REQ_MODE => {
                 let device_mode = DeviceMode::ref_from(xfer.data()).unwrap();
-
-                let interface = req.value;
+                let interface = req.value as u8;
                 let mode = host::Mode::try_from(device_mode.mode).unwrap();
-
                 match mode {
                     host::Mode::Reset => self.device.reset(interface),
                     host::Mode::Start => self.device.start(interface),
                 }
-
                 xfer.accept().unwrap();
             }
             _ => {
@@ -177,7 +174,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         let mut buf = [0; core::mem::size_of::<host::Frame>()];
         if let Ok(_size) = self.read_endpoint.read(&mut buf) {
             let host_frame = host::Frame::read_from(&buf).unwrap();
-            self.device.receive(host_frame.interface as u16, host_frame);
+            self.device.receive(host_frame.interface, host_frame);
         }
     }
 }
@@ -189,17 +186,17 @@ pub trait Device {
     fn device_config(&self) -> DeviceConfig;
 
     /// Called to configure the timing of the CAN interface.
-    fn device_bit_timing(&mut self, interface: u16, timing: DeviceBitTiming);
+    fn device_bit_timing(&mut self, interface: u8, timing: DeviceBitTiming);
 
     /// Called when the host requests an interface is reset.
-    fn reset(&mut self, interface: u16);
+    fn reset(&mut self, interface: u8);
 
     /// Called when the host requests an interface is started.
-    fn start(&mut self, interface: u16);
+    fn start(&mut self, interface: u8);
 
     /// Returns the device state including TX and RX error counters.
-    fn state(&self, interface: u16) -> DeviceState;
+    fn state(&self, interface: u8) -> DeviceState;
 
     /// Called when a frame is received from the host.
-    fn receive(&mut self, interface: u16, frame: host::Frame);
+    fn receive(&mut self, interface: u8, frame: host::Frame);
 }
