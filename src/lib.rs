@@ -98,7 +98,8 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .unwrap();
             }
             REQ_GET_STATE => {
-                xfer.accept_with(self.device.state().as_bytes()).unwrap();
+                xfer.accept_with(self.device.state(req.value).as_bytes())
+                    .unwrap();
             }
             _ => {
                 #[cfg(feature = "defmt-03")]
@@ -177,7 +178,7 @@ pub trait Device {
     fn start(&mut self, interface: u16);
 
     /// Returns the device state including TX and RX error counters.
-    fn state(&self) -> DeviceState;
+    fn state(&self, interface: u16) -> DeviceState;
 
     /// Called when a frame is received from the host.
     fn receive(&mut self, interface: u16, frame: host::Frame);
