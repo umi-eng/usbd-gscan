@@ -272,12 +272,32 @@ pub struct Frame {
 }
 
 impl embedded_can::Frame for Frame {
-    fn new(_id: impl Into<Id>, _data: &[u8]) -> Option<Self> {
-        None
+    fn new(id: impl Into<Id>, data: &[u8]) -> Option<Self> {
+        let mut frame = Frame::new_zeroed();
+
+        frame.can_dlc = fd_len_to_dlc(data.len())?;
+
+        match id.into() {
+            Id::Standard(id) => frame.can_id = id.as_raw() as u32,
+            Id::Extended(id) => frame.can_id = id.as_raw() | IdFlag::EXTENDED.bits(),
+        }
+
+        unsafe { frame.can_data.can_fd.data[..data.len()].copy_from_slice(data) };
+
+        Some(frame)
     }
 
-    fn new_remote(_id: impl Into<Id>, _dlc: usize) -> Option<Self> {
-        None
+    fn new_remote(id: impl Into<Id>, dlc: usize) -> Option<Self> {
+        let mut frame = Frame::new_zeroed();
+
+        match id.into() {
+            Id::Standard(id) => frame.can_id = id.as_raw() as u32,
+            Id::Extended(id) => frame.can_id = id.as_raw() | IdFlag::EXTENDED.bits(),
+        }
+
+        frame.can_dlc = dlc as u8;
+
+        Some(frame)
     }
 
     fn id(&self) -> Id {
