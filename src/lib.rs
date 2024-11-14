@@ -14,7 +14,6 @@ use host::HostConfig;
 use usb_device::class_prelude::*;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
-use zerocopy::FromZeroes;
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;
