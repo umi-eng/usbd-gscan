@@ -3,6 +3,7 @@
 pub mod host;
 pub mod identifier;
 
+use embedded_can::Frame;
 use host::DeviceBitTiming;
 use host::DeviceBitTimingConst;
 use host::DeviceConfig;
@@ -13,6 +14,7 @@ use host::HostConfig;
 use usb_device::class_prelude::*;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
+use zerocopy::FromZeroes;
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;
@@ -51,6 +53,29 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             write_endpoint: alloc.bulk(64),
             read_endpoint: alloc.bulk(64),
             device,
+        }
+    }
+
+    /// Send a CAN frame to the host.
+    ///
+    /// Typically called upon the
+    pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame) {
+        let mut frame = if frame.is_remote_frame() {
+            host::Frame::new_remote(frame.id(), frame.dlc()).unwrap()
+        } else {
+            host::Frame::new(frame.id(), frame.data()).unwrap()
+        };
+
+        frame.echo_id = u32::MAX; // set as receive frame
+
+        frame.interface = interface as u8;
+
+        match self.write_endpoint.write(&frame.as_bytes()[..63]) {
+            #[cfg(feature = "defmt-03")]
+            Err(err) => {
+                defmt::error!("{}", err);
+            }
+            _ => {}
         }
     }
 }
