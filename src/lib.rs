@@ -66,15 +66,11 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         };
 
         frame.echo_id = u32::MAX; // set as receive frame
-
         frame.interface = interface as u8;
 
-        match self.write_endpoint.write(&frame.as_bytes()[..63]) {
+        if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..63]) {
             #[cfg(feature = "defmt-03")]
-            Err(err) => {
-                defmt::error!("{}", err);
-            }
-            _ => {}
+            defmt::error!("{}", _err);
         }
     }
 }
