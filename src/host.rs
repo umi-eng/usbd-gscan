@@ -347,3 +347,33 @@ bitflags! {
         const ERROR = 0x20000000;
     }
 }
+
+/// Get the data length for a given DLC.
+fn fd_dlc_to_len(dlc: u8) -> Option<usize> {
+    match dlc {
+        0..=8 => Some(dlc as usize),
+        9 => Some(12),
+        10 => Some(16),
+        11 => Some(20),
+        12 => Some(24),
+        13 => Some(32),
+        14 => Some(48),
+        15 => Some(64),
+        _ => None,
+    }
+}
+
+/// Get the DLC for a given data length.
+fn fd_len_to_dlc(len: usize) -> Option<u8> {
+    match len {
+        0..=8 => Some(len as u8),
+        12 => Some(9),
+        16 => Some(10),
+        20 => Some(11),
+        24 => Some(12),
+        32 => Some(13),
+        48 => Some(14),
+        64 => Some(15),
+        _ => panic!("Invalid len: {}", len),
+    }
+}
