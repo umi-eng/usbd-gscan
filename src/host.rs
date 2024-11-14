@@ -22,9 +22,9 @@ pub struct HostConfig {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceConfig {
-    pub _reserved0: u8,
-    pub _reserved1: u8,
-    pub _reserved2: u8,
+    _reserved0: u8,
+    _reserved1: u8,
+    _reserved2: u8,
     pub interface_count: u8,
     pub software_version: u32,
     pub hardware_version: u32,
@@ -267,7 +267,7 @@ pub struct Frame {
     pub can_dlc: u8,
     pub interface: u8,
     pub flags: FrameFlag,
-    pub _reserved0: u8,
+    _reserved0: u8,
     pub can_data: CanData,
 }
 
