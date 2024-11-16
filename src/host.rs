@@ -170,7 +170,7 @@ bitflags! {
 pub struct DeviceBitTimingConst {
     pub features: Feature,
     pub fclk_can: u32,
-    pub bit_timing: CanBitTimingConst,
+    pub timing: CanBitTimingConst,
 }
 
 /// Device extended bit timing and feature flags for CAN FD devices.
@@ -180,8 +180,8 @@ pub struct DeviceBitTimingConst {
 pub struct DeviceBitTimingConstExtended {
     pub features: Feature,
     pub fclk_can: u32,
-    pub bit_timing: CanBitTimingConst,
-    pub data_timing: CanBitTimingConst,
+    pub timing_nominal: CanBitTimingConst,
+    pub timing_data: CanBitTimingConst,
 }
 
 #[derive(Debug, FromZeroes, FromBytes, AsBytes)]
