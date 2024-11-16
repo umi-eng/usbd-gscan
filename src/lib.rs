@@ -3,7 +3,7 @@
 pub mod host;
 pub mod identifier;
 
-use embedded_can::Frame;
+use embedded_can::Frame as _;
 use host::*;
 use usb_device::class_prelude::*;
 use zerocopy::AsBytes;
