@@ -114,8 +114,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 xfer.accept_with(config.as_bytes()).unwrap();
             }
             REQ_DEVICE_CONFIG => {
-                xfer.accept_with(self.device.device_config().as_bytes())
-                    .unwrap();
+                xfer.accept_with(self.device.config().as_bytes()).unwrap();
             }
             REQ_GET_STATE => {
                 let interface = req.value as u8;
@@ -149,7 +148,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             REQ_BIT_TIMING => {
                 let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
                 let interface = req.value as u8;
-                self.device.device_bit_timing(interface, timing);
+                self.device.configure_bit_timing(interface, timing);
                 xfer.accept().unwrap();
             }
             REQ_MODE => {
@@ -165,7 +164,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             REQ_BIT_TIMING_DATA => {
                 let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
                 let interface = req.value as u8;
-                self.device.device_bit_timing_data(interface, timing);
+                self.device.configure_bit_timing_data(interface, timing);
                 xfer.accept().unwrap();
             }
             _ => {
@@ -189,13 +188,13 @@ pub trait Device {
     /// Returns the device configuration.
     ///
     /// Requested after reset by the host.
-    fn device_config(&self) -> DeviceConfig;
+    fn config(&self) -> DeviceConfig;
 
     /// Called to configure the timing of the CAN interface.
-    fn device_bit_timing(&mut self, interface: u8, timing: DeviceBitTiming);
+    fn configure_bit_timing(&mut self, interface: u8, timing: DeviceBitTiming);
 
     /// Called to configure the timing of the CAN interface.
-    fn device_bit_timing_data(&mut self, interface: u8, timing: DeviceBitTiming);
+    fn configure_bit_timing_data(&mut self, interface: u8, timing: DeviceBitTiming);
 
     /// Called when the host requests an interface is reset.
     fn reset(&mut self, interface: u8);
