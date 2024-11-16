@@ -6,6 +6,7 @@ pub mod identifier;
 use embedded_can::Frame;
 use host::DeviceBitTiming;
 use host::DeviceBitTimingConst;
+use host::DeviceBitTimingConstExtended;
 use host::DeviceConfig;
 use host::DeviceMode;
 use host::DeviceState;
@@ -29,9 +30,10 @@ const REQ_IDENTIFY: u8 = 7;
 const REQ_GET_USER_ID: u8 = 8;
 const REQ_SET_USER_ID: u8 = 9;
 const REQ_BIT_TIMING_DATA: u8 = 10;
-const REQ_SET_TERMINATION: u8 = 11;
-const REQ_GET_TERMINATION: u8 = 12;
-const REQ_GET_STATE: u8 = 13;
+const REQ_BIT_TIMING_CONST_EXT: u8 = 11;
+const REQ_SET_TERMINATION: u8 = 12;
+const REQ_GET_TERMINATION: u8 = 13;
+const REQ_GET_STATE: u8 = 14;
 
 /// Geschwister Schneider USB device.
 pub struct GsCan<'a, B: UsbBus, D: Device> {
@@ -97,24 +99,15 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
         match req.request {
             REQ_BIT_TIMING_CONST => {
-                let config = DeviceBitTimingConst {
-                    features: Feature::FD,
-                    fclk_can: 24_000_000,
-                    bit_timing: host::CanBitTimingConst {
-                        tseg1_min: 1,
-                        tseg1_max: 31,
-                        tseg2_min: 1,
-                        tset2_max: 15,
-                        sjw_max: 15,
-                        brp_min: 1,
-                        brp_max: 15,
-                        brp_inc: 1,
-                    },
-                };
-                xfer.accept_with(config.as_bytes()).unwrap();
+                xfer.accept_with(self.device.bit_timing().as_bytes())
+                    .unwrap();
             }
             REQ_DEVICE_CONFIG => {
                 xfer.accept_with(self.device.config().as_bytes()).unwrap();
+            }
+            REQ_BIT_TIMING_CONST_EXT => {
+                xfer.accept_with(self.device.bit_timing_ext().as_bytes())
+                    .unwrap();
             }
             REQ_GET_STATE => {
                 let interface = req.value as u8;
@@ -189,6 +182,12 @@ pub trait Device {
     ///
     /// Requested after reset by the host.
     fn config(&self) -> DeviceConfig;
+
+    /// Returns the bit timing options.
+    fn bit_timing(&self) -> DeviceBitTimingConst;
+
+    /// Returns the extended bit timing options.
+    fn bit_timing_ext(&self) -> DeviceBitTimingConstExtended;
 
     /// Called to configure the timing of the CAN interface.
     fn configure_bit_timing(&mut self, interface: u8, timing: DeviceBitTiming);
