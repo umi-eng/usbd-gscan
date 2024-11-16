@@ -4,14 +4,7 @@ pub mod host;
 pub mod identifier;
 
 use embedded_can::Frame;
-use host::DeviceBitTiming;
-use host::DeviceBitTimingConst;
-use host::DeviceBitTimingConstExtended;
-use host::DeviceConfig;
-use host::DeviceMode;
-use host::DeviceState;
-use host::Feature;
-use host::HostConfig;
+use host::*;
 use usb_device::class_prelude::*;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
