@@ -6,8 +6,7 @@ pub mod identifier;
 use embedded_can::Frame as _;
 use host::*;
 use usb_device::class_prelude::*;
-use zerocopy::AsBytes;
-use zerocopy::FromBytes;
+use zerocopy::{AsBytes, FromBytes};
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;
