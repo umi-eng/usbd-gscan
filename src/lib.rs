@@ -15,16 +15,23 @@ pub const INTERFACE_CLASS: u8 = 0xFF;
 const REQ_HOST_FORMAT: u8 = 0;
 const REQ_BIT_TIMING: u8 = 1;
 const REQ_MODE: u8 = 2;
+#[allow(unused)]
 const REQ_BUS_ERROR: u8 = 3;
 const REQ_BIT_TIMING_CONST: u8 = 4;
 const REQ_DEVICE_CONFIG: u8 = 5;
+#[allow(unused)]
 const REQ_TIMESTAMP: u8 = 6;
+#[allow(unused)]
 const REQ_IDENTIFY: u8 = 7;
+#[allow(unused)]
 const REQ_GET_USER_ID: u8 = 8;
+#[allow(unused)]
 const REQ_SET_USER_ID: u8 = 9;
 const REQ_BIT_TIMING_DATA: u8 = 10;
 const REQ_BIT_TIMING_CONST_EXT: u8 = 11;
+#[allow(unused)]
 const REQ_SET_TERMINATION: u8 = 12;
+#[allow(unused)]
 const REQ_GET_TERMINATION: u8 = 13;
 const REQ_GET_STATE: u8 = 14;
 
