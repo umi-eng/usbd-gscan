@@ -349,6 +349,7 @@ bitflags! {
 }
 
 /// Get the data length for a given DLC.
+#[allow(unused)]
 fn fd_dlc_to_len(dlc: u8) -> Option<usize> {
     match dlc {
         0..=8 => Some(dlc as usize),
