@@ -46,12 +46,12 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
     /// Crate a new GsUsb device.
     pub fn new(alloc: &'a UsbBusAllocator<B>, device: D) -> Self {
         // hack to get the out endpoint number right.
-        let _: EndpointOut<'a, B> = alloc.bulk(64);
+        let _: EndpointOut<'a, B> = alloc.bulk(0);
 
         Self {
             interface: alloc.interface(),
-            write_endpoint: alloc.bulk(80),
-            read_endpoint: alloc.bulk(80),
+            write_endpoint: alloc.bulk(64),
+            read_endpoint: alloc.bulk(64),
             device,
         }
     }
@@ -168,21 +168,16 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     }
 
     fn endpoint_out(&mut self, addr: EndpointAddress) {
-        // filter endpoint address.
-        if addr.index() != 2 {
-            return;
-        }
-
         let mut buf = [0; core::mem::size_of::<host::Frame>()];
-        if let Ok(_size) = self.read_endpoint.read(&mut buf) {
+        if let Ok(_size) = self.read_endpoint.read(&mut buf[..63]) {
             let mut host_frame = host::Frame::read_from(&buf).unwrap();
             let result = self.device.receive(host_frame.interface, host_frame);
 
             if result.is_ok() {
                 // echo frame back to host.
                 // required to remove the frame from the hosts.
-                host_frame.echo_id = 0; // tx complete
-                if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()) {
+                host_frame.echo_id = 10; // tx complete
+                if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()[..63]) {
                     #[cfg(feature = "defmt-03")]
                     defmt::error!("{}", _err);
                 }
