@@ -168,6 +168,11 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     }
 
     fn endpoint_out(&mut self, addr: EndpointAddress) {
+        // filter endpoint address.
+        if addr.index() != 2 {
+            return;
+        }
+
         let mut buf = [0; core::mem::size_of::<host::Frame>()];
         if let Ok(_size) = self.read_endpoint.read(&mut buf[..63]) {
             let mut host_frame = host::Frame::read_from(&buf).unwrap();
