@@ -175,8 +175,18 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
         let mut buf = [0; core::mem::size_of::<host::Frame>()];
         if let Ok(_size) = self.read_endpoint.read(&mut buf) {
-            let host_frame = host::Frame::read_from(&buf).unwrap();
-            self.device.receive(host_frame.interface, host_frame);
+            let mut host_frame = host::Frame::read_from(&buf).unwrap();
+            let result = self.device.receive(host_frame.interface, host_frame);
+
+            if result.is_ok() {
+                // echo frame back to host.
+                // required to remove the frame from the hosts.
+                host_frame.echo_id = 0; // tx complete
+                if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()[..63]) {
+                    #[cfg(feature = "defmt-03")]
+                    defmt::error!("{}", _err);
+                }
+            }
         }
     }
 }
@@ -209,5 +219,6 @@ pub trait Device {
     fn state(&self, interface: u8) -> DeviceState;
 
     /// Called when a frame is received from the host.
-    fn receive(&mut self, interface: u8, frame: host::Frame);
+    // todo: error kinds.
+    fn receive(&mut self, interface: u8, frame: host::Frame) -> Result<(), ()>;
 }
