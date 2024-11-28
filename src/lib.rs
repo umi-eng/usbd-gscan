@@ -181,7 +181,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             if result.is_ok() {
                 // echo frame back to host.
                 // required to remove the frame from the hosts.
-                host_frame.echo_id = 10; // tx complete
+                host_frame.echo_id = 0; // tx complete
                 if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()[..63]) {
                     #[cfg(feature = "defmt-03")]
                     defmt::error!("{}", _err);
