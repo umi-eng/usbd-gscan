@@ -50,8 +50,8 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
 
         Self {
             interface: alloc.interface(),
-            write_endpoint: alloc.bulk(64),
-            read_endpoint: alloc.bulk(64),
+            write_endpoint: alloc.bulk(80),
+            read_endpoint: alloc.bulk(80),
             device,
         }
     }
@@ -182,7 +182,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 // echo frame back to host.
                 // required to remove the frame from the hosts.
                 host_frame.echo_id = 0; // tx complete
-                if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()[..63]) {
+                if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()) {
                     #[cfg(feature = "defmt-03")]
                     defmt::error!("{}", _err);
                 }
