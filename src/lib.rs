@@ -275,6 +275,5 @@ pub trait Device {
     fn state(&self, interface: u8) -> DeviceState;
 
     /// Called when a frame is received from the host.
-    // todo: error kinds.
     fn receive(&mut self, interface: u8, frame: host::Frame);
 }
