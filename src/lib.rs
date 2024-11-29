@@ -65,7 +65,8 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
     }
 
     /// Send a CAN frame to the host.
-    pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame) {
+    // Whilst embedded_can::Frame doesn't support FD, we pass the flags separately.
+    pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame, flags: FrameFlag) {
         let mut frame = if frame.is_remote_frame() {
             host::Frame::new_remote(frame.id(), frame.dlc()).unwrap()
         } else {
@@ -74,6 +75,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
 
         frame.echo_id = u32::MAX; // set as receive frame
         frame.interface = interface as u8;
+        frame.flags = flags;
 
         if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
             #[cfg(feature = "defmt-03")]
