@@ -193,7 +193,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
             Some(mut frame) => {
                 self.read_endpoint
-                    .read(&mut frame.as_bytes_mut()[65..])
+                    .read(&mut frame.as_bytes_mut()[64..])
                     .unwrap();
 
                 self.in_frame = None;
