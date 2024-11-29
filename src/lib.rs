@@ -233,16 +233,16 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
         };
 
-        if self.device.receive(frame.interface, frame).is_ok() {
-            frame.echo_id = 0; // tx complete
-            if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
-                #[cfg(feature = "defmt-03")]
-                defmt::error!("{}", _err);
-            }
+        self.device.receive(frame.interface, frame);
 
-            if frame.flags.intersects(FrameFlag::FD) {
-                self.echo_frame = Some(frame);
-            }
+        frame.echo_id = 0; // tx complete
+        if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
+            #[cfg(feature = "defmt-03")]
+            defmt::error!("{}", _err);
+        }
+
+        if frame.flags.intersects(FrameFlag::FD) {
+            self.echo_frame = Some(frame);
         }
     }
 }
@@ -276,5 +276,5 @@ pub trait Device {
 
     /// Called when a frame is received from the host.
     // todo: error kinds.
-    fn receive(&mut self, interface: u8, frame: host::Frame) -> Result<(), ()>;
+    fn receive(&mut self, interface: u8, frame: host::Frame);
 }
