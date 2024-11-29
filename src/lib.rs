@@ -61,8 +61,6 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
     }
 
     /// Send a CAN frame to the host.
-    ///
-    /// Typically called upon the
     pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame) {
         let mut frame = if frame.is_remote_frame() {
             host::Frame::new_remote(frame.id(), frame.dlc()).unwrap()
