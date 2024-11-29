@@ -323,10 +323,11 @@ impl embedded_can::Frame for Frame {
 
     fn data(&self) -> &[u8] {
         // safety: underlying type is initialised with zeros and length is given by dlc.
+        let len = fd_dlc_to_len(self.dlc()).unwrap();
         if self.flags.intersects(FrameFlag::FD) {
-            unsafe { &self.can_data.can_fd.data[..self.dlc()] }
+            unsafe { &self.can_data.can_fd.data[..len] }
         } else {
-            unsafe { &self.can_data.classic_can.data[..self.dlc()] }
+            unsafe { &self.can_data.classic_can.data[..len] }
         }
     }
 }
@@ -350,7 +351,7 @@ bitflags! {
 
 /// Get the data length for a given DLC.
 #[allow(unused)]
-fn fd_dlc_to_len(dlc: u8) -> Option<usize> {
+fn fd_dlc_to_len(dlc: usize) -> Option<usize> {
     match dlc {
         0..=8 => Some(dlc as usize),
         9 => Some(12),
