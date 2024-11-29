@@ -43,6 +43,8 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     /// Stateful store for incomming can frames. Has `Some` when a frame is
     /// partially read.
     in_frame: Option<host::Frame>,
+    echo_frame: Option<host::Frame>,
+    transmit_frame: Option<host::Frame>,
 }
 
 impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
@@ -57,6 +59,8 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             read_endpoint: alloc.bulk(64),
             device,
             in_frame: None,
+            echo_frame: None,
+            transmit_frame: None,
         }
     }
 
@@ -71,9 +75,13 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         frame.echo_id = u32::MAX; // set as receive frame
         frame.interface = interface as u8;
 
-        if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..63]) {
+        if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
             #[cfg(feature = "defmt-03")]
             defmt::error!("{}", _err);
+        }
+
+        if frame.flags.intersects(FrameFlag::FD) {
+            self.transmit_frame = Some(frame);
         }
     }
 }
@@ -169,6 +177,29 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         }
     }
 
+    fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
+        // filter endpoint address.
+        if addr.index() != 1 {
+            return;
+        }
+
+        if let Some(frame) = self.echo_frame.take() {
+            // only write to byte 76. we don't support timestamps yet.
+            if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[64..76]) {
+                #[cfg(feature = "defmt-03")]
+                defmt::error!("{}", _err);
+            }
+        }
+
+        if let Some(frame) = self.transmit_frame.take() {
+            // only write to byte 76. we don't support timestamps yet.
+            if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[64..76]) {
+                #[cfg(feature = "defmt-03")]
+                defmt::error!("{}", _err);
+            }
+        }
+    }
+
     fn endpoint_out(&mut self, addr: EndpointAddress) {
         // filter endpoint address.
         if addr.index() != 2 {
@@ -205,6 +236,10 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
                 #[cfg(feature = "defmt-03")]
                 defmt::error!("{}", _err);
+            }
+
+            if frame.flags.intersects(FrameFlag::FD) {
+                self.echo_frame = Some(frame);
             }
         }
     }
