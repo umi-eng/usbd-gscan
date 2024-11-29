@@ -6,7 +6,7 @@ pub mod identifier;
 use embedded_can::Frame as _;
 use host::*;
 use usb_device::class_prelude::*;
-use zerocopy::{AsBytes, FromBytes};
+use zerocopy::{AsBytes, FromBytes, FromZeroes};
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;
@@ -40,6 +40,9 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
+    /// Stateful store for incomming can frames. Has `Some` when a frame is
+    /// partially read.
+    in_frame: Option<host::Frame>,
 }
 
 impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
@@ -53,6 +56,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             write_endpoint: alloc.bulk(64),
             read_endpoint: alloc.bulk(64),
             device,
+            in_frame: None,
         }
     }
 
@@ -173,19 +177,36 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             return;
         }
 
-        let mut buf = [0; core::mem::size_of::<host::Frame>()];
-        if let Ok(_size) = self.read_endpoint.read(&mut buf[..63]) {
-            let mut host_frame = host::Frame::read_from(&buf).unwrap();
-            let result = self.device.receive(host_frame.interface, host_frame);
+        let mut frame = match self.in_frame {
+            None => {
+                let mut frame = host::Frame::new_zeroed();
+                self.read_endpoint
+                    .read(&mut frame.as_bytes_mut()[..64])
+                    .unwrap();
 
-            if result.is_ok() {
-                // echo frame back to host.
-                // required to remove the frame from the hosts.
-                host_frame.echo_id = 0; // tx complete
-                if let Err(_err) = self.write_endpoint.write(&host_frame.as_bytes()[..63]) {
-                    #[cfg(feature = "defmt-03")]
-                    defmt::error!("{}", _err);
+                if frame.flags.intersects(FrameFlag::FD) {
+                    self.in_frame = Some(frame);
+                    return;
                 }
+
+                frame
+            }
+            Some(mut frame) => {
+                self.read_endpoint
+                    .read(&mut frame.as_bytes_mut()[65..])
+                    .unwrap();
+
+                self.in_frame = None;
+
+                frame
+            }
+        };
+
+        if self.device.receive(frame.interface, frame).is_ok() {
+            frame.echo_id = 0; // tx complete
+            if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
+                #[cfg(feature = "defmt-03")]
+                defmt::error!("{}", _err);
             }
         }
     }
