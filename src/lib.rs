@@ -82,9 +82,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             defmt::error!("{}", _err);
         }
 
-        if frame.flags.intersects(FrameFlag::FD) {
-            self.transmit_frame = Some(frame);
-        }
+        self.transmit_frame = Some(frame);
     }
 }
 
