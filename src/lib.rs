@@ -188,6 +188,9 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[64..76]) {
                 #[cfg(feature = "defmt-03")]
                 defmt::error!("{}", _err);
+            } else {
+                // exit so this function can get called again when the write is finished.
+                return;
             }
         }
 
@@ -196,6 +199,9 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[64..76]) {
                 #[cfg(feature = "defmt-03")]
                 defmt::error!("{}", _err);
+            } else {
+                // exit so this function can get called again when the write is finished.
+                return;
             }
         }
     }
