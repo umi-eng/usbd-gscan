@@ -245,9 +245,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             defmt::error!("{}", _err);
         }
 
-        if frame.flags.intersects(FrameFlag::FD) {
-            self.echo_frame = Some(frame);
-        }
+        self.echo_frame = Some(frame);
     }
 }
 
