@@ -139,7 +139,7 @@ pub struct CanBitTimingConst {
 }
 
 /// Features flags that can be advertised by the device.
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct Feature(u32);
