@@ -159,7 +159,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 let mode = host::Mode::try_from(device_mode.mode).unwrap();
                 match mode {
                     host::Mode::Reset => self.device.reset(interface),
-                    host::Mode::Start => self.device.start(interface),
+                    host::Mode::Start => self.device.start(interface, device_mode.flags),
                 }
                 xfer.accept().unwrap();
             }
@@ -271,7 +271,7 @@ pub trait Device {
     fn reset(&mut self, interface: u8);
 
     /// Called when the host requests an interface is started.
-    fn start(&mut self, interface: u8);
+    fn start(&mut self, interface: u8, features: Feature);
 
     /// Returns the device state including TX and RX error counters.
     fn state(&self, interface: u8) -> DeviceState;
