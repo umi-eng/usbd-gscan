@@ -34,17 +34,22 @@ const REQ_SET_TERMINATION: u8 = 12;
 const REQ_GET_TERMINATION: u8 = 13;
 const REQ_GET_STATE: u8 = 14;
 
+/// Maximum number of interfaces. Defined in the Linux driver.
+/// This may change in future.
+const MAX_INTF: usize = 3;
+
 /// Geschwister Schneider USB device.
 pub struct GsCan<'a, B: UsbBus, D: Device> {
     interface: InterfaceNumber,
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
-    /// Stateful store for incomming can frames. Has `Some` when a frame is
-    /// partially read.
+    interface_fd: [bool; MAX_INTF],
     in_frame: Option<host::Frame>,
-    echo_frame: Option<host::Frame>,
+    echo_start_frame: Option<host::Frame>,
+    echo_end_frame: Option<host::Frame>,
     transmit_frame: Option<host::Frame>,
+    out_frame: Option<host::Frame>,
 }
 
 impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
@@ -58,13 +63,19 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             write_endpoint: alloc.bulk(64),
             read_endpoint: alloc.bulk(64),
             device,
+            interface_fd: [false; MAX_INTF],
             in_frame: None,
-            echo_frame: None,
+            echo_start_frame: None,
+            echo_end_frame: None,
             transmit_frame: None,
+            out_frame: None,
         }
     }
 
     /// Send a CAN frame to the host.
+    ///
+    /// [`UsbDevice::poll()`] should be called immediately after to ensure the
+    /// frame is sent correctly.
     // Whilst embedded_can::Frame doesn't support FD, we pass the flags separately.
     pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame, flags: FrameFlag) {
         let mut frame = if frame.is_remote_frame() {
@@ -76,11 +87,6 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         frame.echo_id = u32::MAX; // set as receive frame
         frame.interface = interface as u8;
         frame.flags = flags;
-
-        if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
-            #[cfg(feature = "defmt-03")]
-            defmt::error!("{}", _err);
-        }
 
         self.transmit_frame = Some(frame);
     }
@@ -156,6 +162,8 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             REQ_MODE => {
                 let device_mode = DeviceMode::ref_from(xfer.data()).unwrap();
                 let interface = req.value as u8;
+                // store interface configuration.
+                self.interface_fd[interface as usize] = device_mode.flags.intersects(Feature::FD);
                 let mode = host::Mode::try_from(device_mode.mode).unwrap();
                 match mode {
                     host::Mode::Reset => self.device.reset(interface),
@@ -177,33 +185,31 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         }
     }
 
+    fn poll(&mut self) {
+        if let Some(frame) = self
+            .transmit_frame
+            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok())
+        {
+            self.out_frame = Some(frame);
+        }
+
+        self.out_frame
+            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
+
+        if let Some(frame) = self
+            .echo_start_frame
+            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok())
+        {
+            self.echo_end_frame = Some(frame);
+        }
+    }
+
     fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
-        // filter endpoint address.
-        if addr.index() != 1 {
-            return;
-        }
+        self.out_frame
+            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
 
-        if let Some(frame) = self.echo_frame.take() {
-            // only write to byte 76. we don't support timestamps yet.
-            if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[64..76]) {
-                #[cfg(feature = "defmt-03")]
-                defmt::error!("{}", _err);
-            } else {
-                // exit so this function can get called again when the write is finished.
-                return;
-            }
-        }
-
-        if let Some(frame) = self.transmit_frame.take() {
-            // only write to byte 76. we don't support timestamps yet.
-            if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[64..76]) {
-                #[cfg(feature = "defmt-03")]
-                defmt::error!("{}", _err);
-            } else {
-                // exit so this function can get called again when the write is finished.
-                return;
-            }
-        }
+        self.echo_end_frame
+            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
     }
 
     fn endpoint_out(&mut self, addr: EndpointAddress) {
@@ -219,7 +225,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .read(&mut frame.as_bytes_mut()[..64])
                     .unwrap();
 
-                if frame.flags.intersects(FrameFlag::FD) {
+                if self.interface_fd[frame.interface as usize] {
                     self.in_frame = Some(frame);
                     return;
                 }
@@ -237,15 +243,21 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
         };
 
-        self.device.receive(frame.interface, frame);
-
         frame.echo_id = 0; // tx complete
-        if let Err(_err) = self.write_endpoint.write(&frame.as_bytes()[..64]) {
-            #[cfg(feature = "defmt-03")]
-            defmt::error!("{}", _err);
-        }
 
-        self.echo_frame = Some(frame);
+        self.device.receive(frame.interface, &frame);
+
+        self.echo_start_frame = Some(frame);
+    }
+
+    fn reset(&mut self) {
+        // reset internal state
+        self.interface_fd = [false; 3];
+        self.in_frame = None;
+        self.transmit_frame = None;
+        self.out_frame = None;
+        self.echo_start_frame = None;
+        self.echo_end_frame = None;
     }
 }
 
@@ -277,5 +289,5 @@ pub trait Device {
     fn state(&self, interface: u8) -> DeviceState;
 
     /// Called when a frame is received from the host.
-    fn receive(&mut self, interface: u8, frame: host::Frame);
+    fn receive(&mut self, interface: u8, frame: &host::Frame);
 }
