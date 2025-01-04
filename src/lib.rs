@@ -204,7 +204,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         }
     }
 
-    fn endpoint_in_complete(&mut self, addr: EndpointAddress) {
+    fn endpoint_in_complete(&mut self, _addr: EndpointAddress) {
         self.out_frame
             .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
 
