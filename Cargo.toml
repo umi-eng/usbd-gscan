@@ -9,6 +9,7 @@ license = "MPL-2.0"
 bitflags = "2.6.0"
 defmt = { version = "0.3", optional = true }
 embedded-can = "0.4.1"
+heapless = "0.8.0"
 usb-device = { version = "0.3.2" }
 zerocopy = { version = "0.7.35", features = ["derive"] }
 
@@ -16,4 +17,4 @@ zerocopy = { version = "0.7.35", features = ["derive"] }
 usbd-class-tester = "0.3.0"
 
 [features]
-defmt-03 = ["dep:defmt", "usb-device/defmt"]
+defmt-03 = ["dep:defmt", "usb-device/defmt", "heapless/defmt-03"]

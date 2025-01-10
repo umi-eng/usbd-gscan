@@ -4,6 +4,7 @@ pub mod host;
 pub mod identifier;
 
 use embedded_can::Frame as _;
+use heapless::spsc::{self, Queue};
 use host::*;
 use usb_device::class_prelude::*;
 use zerocopy::{AsBytes, FromBytes, FromZeroes};
@@ -45,11 +46,12 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
     interface_fd: [bool; MAX_INTF],
-    in_frame: Option<host::Frame>,
-    echo_start_frame: Option<host::Frame>,
-    echo_end_frame: Option<host::Frame>,
-    transmit_frame: Option<host::Frame>,
+    /// Frames waiting to be sent to the host
+    out_queue: spsc::Queue<host::Frame, 64>,
+    /// A frame half sent to the host
     out_frame: Option<host::Frame>,
+    /// A frame half sent from the host
+    in_frame: Option<host::Frame>,
 }
 
 impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
@@ -64,11 +66,9 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             read_endpoint: alloc.bulk(64),
             device,
             interface_fd: [false; MAX_INTF],
-            receive_frame: None,
-            echo_frame_first: None,
-            echo_frame_second: None,
-            transmit_frame_first: None,
-            transmit_frame_second: None,
+            out_queue: Queue::new(),
+            out_frame: None,
+            in_frame: None,
         }
     }
 
@@ -88,13 +88,22 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         frame.interface = interface as u8;
         frame.flags = flags;
 
-        if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
-            // first half write complete.
-            // defer second half of frame.
-            self.transmit_frame_second = Some(frame);
+        if self.out_frame.is_none() {
+            if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
+                // first half write complete.
+                // defer second half of frame.
+                self.out_frame = Some(frame);
+            } else {
+                if self.out_queue.enqueue(frame).is_err() {
+                    #[cfg(feature = "defmt-03")]
+                    defmt::error!("Transmit queue full");
+                }
+            }
         } else {
-            // write endpoint full. defer.
-            self.transmit_frame_first = Some(frame);
+            if self.out_queue.enqueue(frame).is_err() {
+                #[cfg(feature = "defmt-03")]
+                defmt::error!("Transmit queue full");
+            }
         }
     }
 }
@@ -193,31 +202,19 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     }
 
     fn poll(&mut self) {
-        // attempt sending first frame half.
-        if let Some(frame) = self
-            .transmit_frame_first
-            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok())
-        {
-            // defer sending second frame half.
-            self.transmit_frame_second = Some(frame);
+        if self.out_frame.is_none() {
+            // attempt sending new frame.
+            if let Some(frame) = self.out_queue.peek() {
+                if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
+                    let frame = self.out_queue.dequeue().unwrap(); // remove from queue
+                    self.out_frame = Some(frame);
+                }
+            }
+        } else {
+            // attempt sending second frame half.
+            self.out_frame
+                .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
         }
-
-        // attempt sending second frame half.
-        self.transmit_frame_second
-            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
-
-        // attempt sending first frame half.
-        if let Some(frame) = self
-            .echo_frame_first
-            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok())
-        {
-            // defer sending first frame half.
-            self.echo_frame_second = Some(frame);
-        }
-
-        // attempt sending second frame half.
-        self.echo_frame_second
-            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
     }
 
     fn endpoint_in_complete(&mut self, _addr: EndpointAddress) {
@@ -230,7 +227,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             return;
         }
 
-        let mut frame = match self.receive_frame {
+        let mut frame = match self.in_frame {
             None => {
                 let mut frame = host::Frame::new_zeroed();
                 self.read_endpoint
@@ -238,7 +235,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .unwrap();
 
                 if self.interface_fd[frame.interface as usize] {
-                    self.receive_frame = Some(frame);
+                    self.in_frame = Some(frame);
                     return;
                 }
 
@@ -248,8 +245,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 self.read_endpoint
                     .read(&mut frame.as_bytes_mut()[64..])
                     .unwrap();
-
-                self.receive_frame = None;
+                self.in_frame = None;
 
                 frame
             }
@@ -259,24 +255,31 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
         self.device.receive(frame.interface, &frame);
 
-        if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
-            // first half write complete.
-            // defer second half of frame.
-            self.echo_frame_second = Some(frame);
+        if self.out_frame.is_none() {
+            if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
+                // first half write complete.
+                // defer second half of frame.
+                self.out_frame = Some(frame);
+            } else {
+                if self.out_queue.enqueue(frame).is_err() {
+                    #[cfg(feature = "defmt-03")]
+                    defmt::error!("Transmit queue full");
+                }
+            }
         } else {
-            // write endpoint full. defer.
-            self.echo_frame_first = Some(frame);
+            if self.out_queue.enqueue(frame).is_err() {
+                #[cfg(feature = "defmt-03")]
+                defmt::error!("Transmit queue full");
+            }
         }
     }
 
     fn reset(&mut self) {
         // reset internal state
         self.interface_fd = [false; 3];
-        self.receive_frame = None;
-        self.echo_frame_first = None;
-        self.echo_frame_second = None;
-        self.transmit_frame_first = None;
-        self.transmit_frame_second = None;
+        self.out_queue = Queue::new();
+        self.out_frame = None;
+        self.in_frame = None;
     }
 }
 
