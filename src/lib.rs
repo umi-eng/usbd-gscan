@@ -64,11 +64,11 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             read_endpoint: alloc.bulk(64),
             device,
             interface_fd: [false; MAX_INTF],
-            in_frame: None,
-            echo_start_frame: None,
-            echo_end_frame: None,
-            transmit_frame: None,
-            out_frame: None,
+            receive_frame: None,
+            echo_frame_first: None,
+            echo_frame_second: None,
+            transmit_frame_first: None,
+            transmit_frame_second: None,
         }
     }
 
@@ -88,7 +88,14 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         frame.interface = interface as u8;
         frame.flags = flags;
 
-        self.transmit_frame = Some(frame);
+        if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
+            // first half write complete.
+            // defer second half of frame.
+            self.transmit_frame_second = Some(frame);
+        } else {
+            // write endpoint full. defer.
+            self.transmit_frame_first = Some(frame);
+        }
     }
 }
 
@@ -186,30 +193,35 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     }
 
     fn poll(&mut self) {
+        // attempt sending first frame half.
         if let Some(frame) = self
-            .transmit_frame
+            .transmit_frame_first
             .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok())
         {
-            self.out_frame = Some(frame);
+            // defer sending second frame half.
+            self.transmit_frame_second = Some(frame);
         }
 
-        self.out_frame
+        // attempt sending second frame half.
+        self.transmit_frame_second
             .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
 
+        // attempt sending first frame half.
         if let Some(frame) = self
-            .echo_start_frame
+            .echo_frame_first
             .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok())
         {
-            self.echo_end_frame = Some(frame);
+            // defer sending first frame half.
+            self.echo_frame_second = Some(frame);
         }
+
+        // attempt sending second frame half.
+        self.echo_frame_second
+            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
     }
 
     fn endpoint_in_complete(&mut self, _addr: EndpointAddress) {
-        self.out_frame
-            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
-
-        self.echo_end_frame
-            .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
+        self.poll();
     }
 
     fn endpoint_out(&mut self, addr: EndpointAddress) {
@@ -218,7 +230,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             return;
         }
 
-        let mut frame = match self.in_frame {
+        let mut frame = match self.receive_frame {
             None => {
                 let mut frame = host::Frame::new_zeroed();
                 self.read_endpoint
@@ -226,7 +238,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .unwrap();
 
                 if self.interface_fd[frame.interface as usize] {
-                    self.in_frame = Some(frame);
+                    self.receive_frame = Some(frame);
                     return;
                 }
 
@@ -237,7 +249,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .read(&mut frame.as_bytes_mut()[64..])
                     .unwrap();
 
-                self.in_frame = None;
+                self.receive_frame = None;
 
                 frame
             }
@@ -247,17 +259,24 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
         self.device.receive(frame.interface, &frame);
 
-        self.echo_start_frame = Some(frame);
+        if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
+            // first half write complete.
+            // defer second half of frame.
+            self.echo_frame_second = Some(frame);
+        } else {
+            // write endpoint full. defer.
+            self.echo_frame_first = Some(frame);
+        }
     }
 
     fn reset(&mut self) {
         // reset internal state
         self.interface_fd = [false; 3];
-        self.in_frame = None;
-        self.transmit_frame = None;
-        self.out_frame = None;
-        self.echo_start_frame = None;
-        self.echo_end_frame = None;
+        self.receive_frame = None;
+        self.echo_frame_first = None;
+        self.echo_frame_second = None;
+        self.transmit_frame_first = None;
+        self.transmit_frame_second = None;
     }
 }
 
