@@ -13,8 +13,5 @@ heapless = "0.8.0"
 usb-device = { version = "0.3.2" }
 zerocopy = { version = "0.7.35", features = ["derive"] }
 
-[dev-dependencies]
-usbd-class-tester = "0.3.0"
-
 [features]
 defmt-03 = ["dep:defmt", "usb-device/defmt", "heapless/defmt-03"]
