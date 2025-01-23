@@ -162,6 +162,16 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
         match req.request {
             REQ_HOST_FORMAT => {
+                if xfer.data().len() != 4 {
+                    #[cfg(feature = "defmt-03")]
+                    defmt::error!(
+                        "Host format request length incorrect. Expected 4, got {}",
+                        xfer.data().len()
+                    );
+                    xfer.reject().unwrap();
+                    return;
+                }
+
                 let config = HostConfig::ref_from(xfer.data()).unwrap();
                 assert_eq!(
                     config.byte_order, 0x0000beef,
