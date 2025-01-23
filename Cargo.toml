@@ -19,6 +19,5 @@ defmt-03 = ["dep:defmt", "usb-device/defmt", "heapless/defmt-03"]
 [dev-dependencies]
 usbd-class-tester = "0.3.0"
 
-
 [[test]]
 name = "mock"
