@@ -1,4 +1,3 @@
-use usb_device::{bus::UsbBus, LangID};
 use usbd_gscan::{
     host::{
         CanBitTimingConst, CanState, DeviceBitTiming, DeviceBitTimingConst,
