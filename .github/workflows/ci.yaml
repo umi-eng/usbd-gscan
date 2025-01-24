@@ -1,0 +1,57 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+      - run: cargo +${{steps.toolchain.outputs.name}} fmt --all -- --check
+
+  build:
+    name: Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo +${{steps.toolchain.outputs.name}} build
+
+  test:
+    name: Test
+    needs: [build]
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo +${{steps.toolchain.outputs.name}} test
