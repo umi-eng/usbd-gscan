@@ -131,7 +131,7 @@ pub struct CanBitTimingConst {
     pub tseg1_min: u32,
     pub tseg1_max: u32,
     pub tseg2_min: u32,
-    pub tset2_max: u32,
+    pub tseg2_max: u32,
     pub sjw_max: u32,
     pub brp_min: u32,
     pub brp_max: u32,
