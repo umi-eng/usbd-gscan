@@ -2,11 +2,15 @@
 
 pub mod host;
 pub mod identifier;
+mod msft;
 
 use embedded_can::Frame as _;
 use heapless::spsc::{self, Queue};
 use host::*;
-use usb_device::class_prelude::*;
+use usb_device::{
+    class_prelude::*,
+    control::{Recipient, RequestType},
+};
 use zerocopy::{AsBytes, FromBytes, FromZeroes};
 
 /// Interface class: vendor defined.
@@ -123,6 +127,39 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     // Handle control requests to the host.
     fn control_in(&mut self, xfer: ControlIn<B>) {
         let req = *xfer.request();
+
+        if req.request_type == RequestType::Standard
+            && req.recipient == Recipient::Device
+            && req.request == 6
+            && req.value == 0x03EE
+        {
+            let length = req.length as usize;
+            xfer.accept_with(&msft::STRING_DESC[..length]).unwrap();
+            return;
+        }
+
+        if req.request_type == RequestType::Vendor
+            && req.recipient == Recipient::Device
+            && req.request == msft::VENDOR_CODE
+            && req.index == 4
+            && req.value == 0
+        {
+            let length = req.length as usize;
+            xfer.accept_with(&msft::ID_FEATURE_DESC[..length]).unwrap();
+            return;
+        }
+
+        if req.request_type == RequestType::Vendor
+            && req.recipient == Recipient::Interface
+            && req.request == msft::VENDOR_CODE
+            && req.index == 5
+            && req.value == 0
+        {
+            let length = req.length as usize;
+            xfer.accept_with(&msft::EXT_PROP_FEATURE_DESC[..length])
+                .unwrap();
+            return;
+        }
 
         if req.request_type != control::RequestType::Vendor {
             return;
