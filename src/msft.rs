@@ -5,6 +5,7 @@ use usb_device::descriptor::descriptor_type;
 /// Vendor code
 pub const VENDOR_CODE: u8 = 0x20;
 
+/// Descriptor string
 #[rustfmt::skip]
 pub const STRING_DESC: &[u8] = &[
     0x12, // length
@@ -14,8 +15,9 @@ pub const STRING_DESC: &[u8] = &[
     0x00,
 ];
 
+/// Compatible ID feature descriptor
 #[rustfmt::skip]
-pub const COMP_ID_FEATURE_DESC: &[u8] = &[
+pub const ID_FEATURE_DESC: &[u8] = &[
     0x10, 0x00, 0x00, 0x00, // length (0x00000010)
 	0x00, 0x01,             // BCD version 1.0
 	0x04, 0x00,             // feature description index (0x0004)
@@ -35,6 +37,7 @@ pub const COMP_ID_FEATURE_DESC: &[u8] = &[
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reserved
 ];
 
+/// Extension property feature descriptor
 #[rustfmt::skip]
 pub const EXT_PROP_FEATURE_DESC: &[u8] = &[
    	0x92, 0x00, 0x00, 0x00, // length
