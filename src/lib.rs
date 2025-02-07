@@ -2,6 +2,7 @@
 
 pub mod host;
 pub mod identifier;
+mod msft;
 
 use embedded_can::Frame as _;
 use heapless::spsc::{self, Queue};
