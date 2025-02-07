@@ -10,7 +10,7 @@ bitflags = "2.6.0"
 defmt = { version = "0.3", optional = true }
 embedded-can = "0.4.1"
 heapless = "0.8.0"
-usb-device = { version = "0.3.2" }
+usb-device = { version = "0.3.2", features = ["control-buffer-256"] }
 zerocopy = { version = "0.7.35", features = ["derive"] }
 
 [features]
