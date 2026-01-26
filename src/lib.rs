@@ -115,6 +115,11 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
 
         self.enqueue_frame(frame);
     }
+
+    /// Send an error frame to the host.
+    pub fn transmit_error(&mut self, interface: u16, error: errors::Error) {
+        self.enqueue_frame(error.to_err_frame(interface as u8));
+    }
 }
 
 impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
