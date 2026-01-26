@@ -333,7 +333,7 @@ impl embedded_can::Frame for Frame {
 }
 
 /// Identifier flags.
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, PartialEq, FromZeroes, FromBytes, AsBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct IdFlag(u32);

@@ -1,5 +1,6 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
+pub mod errors;
 pub mod host;
 pub mod identifier;
 mod msft;
@@ -76,22 +77,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         }
     }
 
-    /// Send a CAN frame to the host.
-    ///
-    /// [`UsbDevice::poll()`] should be called immediately after to ensure the
-    /// frame is sent correctly.
-    // Whilst embedded_can::Frame doesn't support FD, we pass the flags separately.
-    pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame, flags: FrameFlag) {
-        let mut frame = if frame.is_remote_frame() {
-            host::Frame::new_remote(frame.id(), frame.dlc()).unwrap()
-        } else {
-            host::Frame::new(frame.id(), frame.data()).unwrap()
-        };
-
-        frame.echo_id = u32::MAX; // set as receive frame
-        frame.interface = interface as u8;
-        frame.flags = flags;
-
+    fn enqueue_frame(&mut self, frame: host::Frame) {
         if self.out_frame.is_none() {
             if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
                 // first half write complete.
@@ -109,6 +95,30 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
                 defmt::error!("Transmit queue full");
             }
         }
+    }
+
+    /// Send a CAN frame to the host.
+    ///
+    /// [`UsbDevice::poll()`] should be called immediately after to ensure the
+    /// frame is sent correctly.
+    // Whilst embedded_can::Frame doesn't support FD, we pass the flags separately.
+    pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame, flags: FrameFlag) {
+        let mut frame = if frame.is_remote_frame() {
+            host::Frame::new_remote(frame.id(), frame.dlc()).unwrap()
+        } else {
+            host::Frame::new(frame.id(), frame.data()).unwrap()
+        };
+
+        frame.echo_id = u32::MAX; // set as receive frame
+        frame.interface = interface as u8;
+        frame.flags = flags;
+
+        self.enqueue_frame(frame);
+    }
+
+    /// Send an error frame to the host.
+    pub fn transmit_error(&mut self, interface: u16, error: errors::Error) {
+        self.enqueue_frame(error.to_err_frame(interface as u8));
     }
 }
 
