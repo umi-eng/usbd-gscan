@@ -27,7 +27,7 @@ pub struct Error {
 }
 
 impl Error {
-    pub(crate) fn to_err_frame(&self, interface: u8) -> crate::host::Frame {
+    pub(crate) fn to_err_frame(self, interface: u8) -> crate::host::Frame {
         let mut mask = ErrorClass::empty();
         let mut data = [0; 8];
 
