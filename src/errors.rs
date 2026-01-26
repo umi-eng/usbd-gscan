@@ -200,3 +200,22 @@ pub const THRESHOLD_WARNING: u16 = 96;
 pub const THRESHOLD_PASSIVE: u16 = 128;
 /// CAN error bus-off threshold
 pub const THRESHOLD_BUS_OFF: u16 = 255;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_to_frame() {
+        let error = Error::default();
+        let frame = error.to_err_frame(0);
+
+        assert_eq!(frame.can_dlc, 8);
+        assert_eq!(frame.echo_id, u32::MAX); // received frame
+        assert_eq!(IdFlag::from_bits_truncate(frame.can_id), IdFlag::ERROR);
+        assert_eq!(
+            unsafe { frame.can_data.classic_can }.data,
+            [0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+}
