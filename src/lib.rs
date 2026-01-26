@@ -83,17 +83,13 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
                 // first half write complete.
                 // defer second half of frame.
                 self.out_frame = Some(frame);
-            } else {
-                if self.out_queue.enqueue(frame).is_err() {
-                    #[cfg(feature = "defmt-03")]
-                    defmt::error!("Transmit queue full");
-                }
-            }
-        } else {
-            if self.out_queue.enqueue(frame).is_err() {
+            } else if self.out_queue.enqueue(frame).is_err() {
                 #[cfg(feature = "defmt-03")]
                 defmt::error!("Transmit queue full");
             }
+        } else if self.out_queue.enqueue(frame).is_err() {
+            #[cfg(feature = "defmt-03")]
+            defmt::error!("Transmit queue full");
         }
     }
 

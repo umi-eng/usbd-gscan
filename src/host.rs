@@ -98,9 +98,9 @@ pub enum CanState {
     Sleeping = 5,
 }
 
-impl Into<u32> for CanState {
-    fn into(self) -> u32 {
-        self as u32
+impl From<CanState> for u32 {
+    fn from(value: CanState) -> Self {
+        value as u32
     }
 }
 
@@ -353,7 +353,7 @@ bitflags! {
 #[allow(unused)]
 fn fd_dlc_to_len(dlc: usize) -> Option<usize> {
     match dlc {
-        0..=8 => Some(dlc as usize),
+        0..=8 => Some(dlc),
         9 => Some(12),
         10 => Some(16),
         11 => Some(20),
