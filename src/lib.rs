@@ -312,23 +312,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
         self.device.receive(frame.interface, &frame);
 
-        if self.out_frame.is_none() {
-            if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
-                // first half write complete.
-                // defer second half of frame.
-                self.out_frame = Some(frame);
-            } else {
-                if self.out_queue.enqueue(frame).is_err() {
-                    #[cfg(feature = "defmt-03")]
-                    defmt::error!("Transmit queue full");
-                }
-            }
-        } else {
-            if self.out_queue.enqueue(frame).is_err() {
-                #[cfg(feature = "defmt-03")]
-                defmt::error!("Transmit queue full");
-            }
-        }
+        self.enqueue_frame(frame);
     }
 
     fn reset(&mut self) {
