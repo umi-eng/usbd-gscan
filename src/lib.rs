@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod errors;
 pub mod host;
 pub mod identifier;
 mod msft;
