@@ -280,7 +280,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             return;
         }
 
-        let mut frame = match self.in_frame {
+        let frame = match self.in_frame {
             None => {
                 let mut frame = host::Frame::new_zeroed();
                 self.read_endpoint
@@ -303,8 +303,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 frame
             }
         };
-
-        frame.echo_id = 0; // tx complete
 
         self.device.receive(frame.interface, &frame);
 
