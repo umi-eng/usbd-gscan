@@ -77,12 +77,33 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         }
     }
 
+    /// Get the size of frame in USB packet transfer
+    ///
+    /// The size depends on whether the adapter is in FD or Normal mode, and also on whether
+    /// hardware timestamps are supported and enabled. Currently, hardware timestamps are NOT
+    /// supported, so these are the size of frames without timestamps.
+    fn frame_wire_len(frame: &host::Frame) -> usize {
+        if frame.flags.intersects(FrameFlag::FD) {
+            76
+        } else {
+            20
+        }
+    }
+
     fn enqueue_frame(&mut self, frame: host::Frame) {
+        let wire_len = Self::frame_wire_len(&frame);
+
         if self.out_frame.is_none() {
-            if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
-                // first half write complete.
-                // defer second half of frame.
-                self.out_frame = Some(frame);
+            let first_chunk_len = wire_len.min(64);
+            if self
+                .write_endpoint
+                .write(&frame.as_bytes()[..first_chunk_len])
+                .is_ok()
+            {
+                // If needed, defer second half write.
+                if wire_len > 64 {
+                    self.out_frame = Some(frame);
+                }
             } else if self.out_queue.enqueue(frame).is_err() {
                 #[cfg(feature = "defmt-03")]
                 defmt::error!("Transmit queue full");
@@ -258,15 +279,27 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         if self.out_frame.is_none() {
             // attempt sending new frame.
             if let Some(frame) = self.out_queue.peek() {
-                if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
+                let wire_len = Self::frame_wire_len(frame);
+                let first_chunk_len = wire_len.min(64);
+                if self
+                    .write_endpoint
+                    .write(&frame.as_bytes()[..first_chunk_len])
+                    .is_ok()
+                {
                     let frame = self.out_queue.dequeue().unwrap(); // remove from queue
-                    self.out_frame = Some(frame);
+                    if wire_len > 64 {
+                        self.out_frame = Some(frame);
+                    }
                 }
             }
         } else {
             // attempt sending second frame half.
-            self.out_frame
-                .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
+            self.out_frame.take_if(|frame| {
+                let wire_len = Self::frame_wire_len(frame);
+                self.write_endpoint
+                    .write(&frame.as_bytes()[64..wire_len])
+                    .is_ok()
+            });
         }
     }
 
