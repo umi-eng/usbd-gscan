@@ -86,11 +86,11 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
                 // defer second half of frame.
                 self.out_frame = Some(frame);
             } else if self.out_queue.enqueue(frame).is_err() {
-                #[cfg(feature = "defmt-03")]
+                #[cfg(feature = "defmt")]
                 defmt::error!("Transmit queue full");
             }
         } else if self.out_queue.enqueue(frame).is_err() {
-            #[cfg(feature = "defmt-03")]
+            #[cfg(feature = "defmt")]
             defmt::error!("Transmit queue full");
         }
     }
@@ -191,7 +191,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .unwrap();
             }
             _ => {
-                #[cfg(feature = "defmt-03")]
+                #[cfg(feature = "defmt")]
                 defmt::warn!("Unimplemented request kind: {}", req.request);
             }
         }
@@ -208,7 +208,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         match req.request {
             REQ_HOST_FORMAT => {
                 if xfer.data().len() != 4 {
-                    #[cfg(feature = "defmt-03")]
+                    #[cfg(feature = "defmt")]
                     defmt::error!(
                         "Host format request length incorrect. Expected 4, got {}",
                         xfer.data().len()
@@ -249,7 +249,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 xfer.accept().unwrap();
             }
             _ => {
-                #[cfg(feature = "defmt-03")]
+                #[cfg(feature = "defmt")]
                 defmt::warn!("Unimplemented request kind: {}", req.request);
                 xfer.reject().ok();
             }

@@ -7,7 +7,7 @@ use zerocopy::FromZeros;
 
 /// Error message to host
 #[derive(Debug, Default, Clone, Copy)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Error {
     /// Transmit timeout
     pub tx_timeout: bool,
@@ -91,7 +91,7 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(C)]
 pub struct ControllerError(u8);
 
@@ -107,7 +107,7 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(C)]
 pub struct ProtocolErrorKind(u8);
 
@@ -126,7 +126,7 @@ bitflags! {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(C)]
 pub enum ProtocolErrorLocation {
     /// Unspecified
@@ -172,7 +172,7 @@ pub enum ProtocolErrorLocation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(C)]
 pub enum TransceiverError {
     /// Unspecified
