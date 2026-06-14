@@ -295,6 +295,7 @@ impl embedded_can::Frame for Frame {
             Id::Extended(id) => frame.can_id = id.as_raw() | IdFlag::EXTENDED.bits(),
         }
 
+        frame.can_id |= IdFlag::REMOTE.bits();
         frame.can_dlc = dlc as u8;
 
         Some(frame)
