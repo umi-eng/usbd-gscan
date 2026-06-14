@@ -376,6 +376,6 @@ fn fd_len_to_dlc(len: usize) -> Option<u8> {
         32 => Some(13),
         48 => Some(14),
         64 => Some(15),
-        _ => panic!("Invalid len: {}", len),
+        _ => None,
     }
 }
