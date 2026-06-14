@@ -1,8 +1,12 @@
 //! Host interface messages.
 
 use bitflags::bitflags;
-use embedded_can::{ExtendedId, Id, StandardId};
-use zerocopy::{AsBytes, FromBytes, FromZeroes};
+use embedded_can::ExtendedId;
+use embedded_can::Id;
+use embedded_can::StandardId;
+use zerocopy::AsBytes;
+use zerocopy::FromBytes;
+use zerocopy::FromZeroes;
 
 /// Tells the device the byte order of the host.
 ///
@@ -385,8 +389,10 @@ fn fd_len_to_dlc(len: usize) -> Option<u8> {
 mod tests {
     use super::*;
     use crate::host::Frame;
+    use embedded_can::ExtendedId;
     use embedded_can::Frame as EmbeddedCanFrame;
-    use embedded_can::{ExtendedId, Id, StandardId};
+    use embedded_can::Id;
+    use embedded_can::StandardId;
 
     #[test]
     fn frame_new_standard() {

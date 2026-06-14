@@ -1,10 +1,13 @@
-use usbd_gscan::{
-    host::{
-        CanBitTimingConst, CanState, DeviceBitTiming, DeviceBitTimingConst,
-        DeviceBitTimingConstExtended, DeviceConfig, DeviceState, Feature,
-    },
-    Device, GsCan,
-};
+use usbd_gscan::host::CanBitTimingConst;
+use usbd_gscan::host::CanState;
+use usbd_gscan::host::DeviceBitTiming;
+use usbd_gscan::host::DeviceBitTimingConst;
+use usbd_gscan::host::DeviceBitTimingConstExtended;
+use usbd_gscan::host::DeviceConfig;
+use usbd_gscan::host::DeviceState;
+use usbd_gscan::host::Feature;
+use usbd_gscan::Device;
+use usbd_gscan::GsCan;
 
 const TIMING_NOMINAL: CanBitTimingConst = CanBitTimingConst {
     tseg1_min: 1,

@@ -6,13 +6,15 @@ pub mod identifier;
 mod msft;
 
 use embedded_can::Frame as _;
-use heapless::spsc::{self, Queue};
+use heapless::spsc::Queue;
+use heapless::spsc::{self};
 use host::*;
-use usb_device::{
-    class_prelude::*,
-    control::{Recipient, RequestType},
-};
-use zerocopy::{AsBytes, FromBytes, FromZeroes};
+use usb_device::class_prelude::*;
+use usb_device::control::Recipient;
+use usb_device::control::RequestType;
+use zerocopy::AsBytes;
+use zerocopy::FromBytes;
+use zerocopy::FromZeroes;
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;

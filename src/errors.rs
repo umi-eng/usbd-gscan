@@ -1,4 +1,7 @@
-use crate::host::{CanData, Frame, FrameFlag, IdFlag};
+use crate::host::CanData;
+use crate::host::Frame;
+use crate::host::FrameFlag;
+use crate::host::IdFlag;
 use bitflags::bitflags;
 use zerocopy::FromZeroes;
 
