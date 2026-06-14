@@ -3,7 +3,7 @@ use crate::host::Frame;
 use crate::host::FrameFlag;
 use crate::host::IdFlag;
 use bitflags::bitflags;
-use zerocopy::FromZeroes;
+use zerocopy::FromZeros;
 
 /// Error message to host
 #[derive(Debug, Default, Clone, Copy)]

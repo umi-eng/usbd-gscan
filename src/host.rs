@@ -4,15 +4,16 @@ use bitflags::bitflags;
 use embedded_can::ExtendedId;
 use embedded_can::Id;
 use embedded_can::StandardId;
-use zerocopy::AsBytes;
 use zerocopy::FromBytes;
-use zerocopy::FromZeroes;
+use zerocopy::FromZeros;
+use zerocopy::Immutable;
+use zerocopy::IntoBytes;
 
 /// Tells the device the byte order of the host.
 ///
 /// `byte_order` will contain `0x0000beef` for little endian and `0xefbe0000`
 /// for big endian.
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct HostConfig {
@@ -22,7 +23,7 @@ pub struct HostConfig {
 /// Device configuration.
 ///
 /// `interface_count`
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceConfig {
@@ -75,7 +76,7 @@ impl TryFrom<u32> for Mode {
     }
 }
 
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceMode {
@@ -84,7 +85,7 @@ pub struct DeviceMode {
 }
 
 /// Same as Linux netlink can_state.
-#[derive(Debug, Clone, Copy, AsBytes)]
+#[derive(Debug, Clone, Copy, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(u32)]
 pub enum CanState {
@@ -108,7 +109,7 @@ impl From<CanState> for u32 {
     }
 }
 
-#[derive(Debug, AsBytes)]
+#[derive(Debug, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceState {
@@ -117,7 +118,7 @@ pub struct DeviceState {
     pub tx_errors: u32,
 }
 
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceBitTiming {
@@ -128,7 +129,7 @@ pub struct DeviceBitTiming {
     pub brp: u32,
 }
 
-#[derive(Debug, Default, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Default, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct CanBitTimingConst {
@@ -143,7 +144,7 @@ pub struct CanBitTimingConst {
 }
 
 /// Features flags that can be advertised by the device.
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct Feature(u32);
@@ -168,7 +169,7 @@ bitflags! {
 }
 
 /// Device bit timing and feature flags.
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceBitTimingConst {
@@ -178,7 +179,7 @@ pub struct DeviceBitTimingConst {
 }
 
 /// Device extended bit timing and feature flags for CAN FD devices.
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceBitTimingConstExtended {
@@ -188,21 +189,21 @@ pub struct DeviceBitTimingConstExtended {
     pub timing_data: CanBitTimingConst,
 }
 
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct IdentifyMode {
     pub mode: u32,
 }
 
-#[derive(Debug, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, FromBytes, IntoBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct DeviceTerminationState {
     pub state: u32,
 }
 
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct ClassicCan {
@@ -210,7 +211,7 @@ pub struct ClassicCan {
     _padding: [u8; 60],
 }
 
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct ClassicCanTimestamp {
@@ -219,7 +220,7 @@ pub struct ClassicCanTimestamp {
     _padding: [u8; 56],
 }
 
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct CanFd {
@@ -227,7 +228,7 @@ pub struct CanFd {
     _padding: [u8; 4],
 }
 
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct CanFdTimestamp {
@@ -235,7 +236,7 @@ pub struct CanFdTimestamp {
     pub timestamp_us: u32,
 }
 
-#[derive(Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[repr(C)]
 pub union CanData {
     pub classic_can: ClassicCan,
@@ -245,7 +246,7 @@ pub union CanData {
 }
 
 /// Frame flags.
-#[derive(Debug, Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct FrameFlag(u8);
@@ -263,7 +264,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, FromZeroes, FromBytes, AsBytes)]
+#[derive(Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[repr(C)]
 pub struct Frame {
     pub echo_id: u32,
@@ -338,7 +339,7 @@ impl embedded_can::Frame for Frame {
 }
 
 /// Identifier flags.
-#[derive(Debug, Clone, Copy, PartialEq, FromZeroes, FromBytes, AsBytes)]
+#[derive(Debug, Clone, Copy, PartialEq, FromBytes, IntoBytes)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(C)]
 pub struct IdFlag(u32);

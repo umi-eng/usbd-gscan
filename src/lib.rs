@@ -12,9 +12,9 @@ use host::*;
 use usb_device::class_prelude::*;
 use usb_device::control::Recipient;
 use usb_device::control::RequestType;
-use zerocopy::AsBytes;
 use zerocopy::FromBytes;
-use zerocopy::FromZeroes;
+use zerocopy::FromZeros;
+use zerocopy::IntoBytes;
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;
@@ -217,7 +217,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     return;
                 }
 
-                let config = HostConfig::ref_from(xfer.data()).unwrap();
+                let config = HostConfig::read_from_bytes(xfer.data()).unwrap();
                 assert_eq!(
                     config.byte_order, 0x0000beef,
                     "Byte order check mismatch. Big endian not currently supported.",
@@ -225,13 +225,13 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 xfer.accept().unwrap();
             }
             REQ_BIT_TIMING => {
-                let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
+                let timing = DeviceBitTiming::read_from_bytes(xfer.data()).unwrap();
                 let interface = req.value as u8;
                 self.device.configure_bit_timing(interface, timing);
                 xfer.accept().unwrap();
             }
             REQ_MODE => {
-                let device_mode = DeviceMode::ref_from(xfer.data()).unwrap();
+                let device_mode = DeviceMode::read_from_bytes(xfer.data()).unwrap();
                 let interface = req.value as u8;
                 // store interface configuration.
                 self.interface_fd[interface as usize] = device_mode.flags.intersects(Feature::FD);
@@ -243,7 +243,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 xfer.accept().unwrap();
             }
             REQ_BIT_TIMING_DATA => {
-                let timing = DeviceBitTiming::read_from(xfer.data()).unwrap();
+                let timing = DeviceBitTiming::read_from_bytes(xfer.data()).unwrap();
                 let interface = req.value as u8;
                 self.device.configure_bit_timing_data(interface, timing);
                 xfer.accept().unwrap();
@@ -286,7 +286,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             None => {
                 let mut frame = host::Frame::new_zeroed();
                 self.read_endpoint
-                    .read(&mut frame.as_bytes_mut()[..64])
+                    .read(&mut frame.as_mut_bytes()[..64])
                     .unwrap();
 
                 if self.interface_fd[frame.interface as usize] {
@@ -298,7 +298,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
             Some(mut frame) => {
                 self.read_endpoint
-                    .read(&mut frame.as_bytes_mut()[64..])
+                    .read(&mut frame.as_mut_bytes()[64..])
                     .unwrap();
                 self.in_frame = None;
 
