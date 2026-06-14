@@ -380,3 +380,94 @@ fn fd_len_to_dlc(len: usize) -> Option<u8> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::host::Frame;
+    use embedded_can::Frame as EmbeddedCanFrame;
+    use embedded_can::{ExtendedId, Id, StandardId};
+
+    #[test]
+    fn frame_new_standard() {
+        let data = vec![0x11, 0x22, 0x33];
+        let id = StandardId::new(0x123).unwrap();
+        let frame = Frame::new(id, &data).unwrap();
+
+        assert_eq!(frame.can_id, 0x123);
+        assert_eq!(frame.can_dlc, 3);
+        assert_eq!(unsafe { &frame.can_data.can_fd.data[..3] }, data);
+    }
+
+    #[test]
+    fn frame_new_extended() {
+        let data = vec![0x11, 0x22, 0x33];
+        let id = ExtendedId::new(0x1234567).unwrap();
+        let frame = Frame::new(id, &data).unwrap();
+
+        assert_eq!(frame.can_id, 0x1234567 | 0x80000000);
+        assert_eq!(frame.can_dlc, 3);
+        assert_eq!(unsafe { &frame.can_data.can_fd.data[..3] }, data);
+    }
+
+    #[test]
+    fn frame_new_remote_standard() {
+        let frame = Frame::new_remote(StandardId::new(0x123).unwrap(), 3).unwrap();
+
+        assert_eq!(frame.can_id & 0x000007FF, 0x123);
+        assert!(frame.is_remote_frame());
+        assert_eq!(frame.can_dlc, 3);
+    }
+
+    #[test]
+    fn frame_new_remote_extended() {
+        let frame = Frame::new_remote(ExtendedId::new(0x1234567).unwrap(), 3).unwrap();
+
+        assert_eq!(frame.can_id & 0x1FFFFFFF, 0x1234567);
+        assert!(frame.is_remote_frame());
+        assert_eq!(frame.can_dlc, 3);
+    }
+
+    #[test]
+    fn frame_id() {
+        let frame = Frame::new(StandardId::new(0x123).unwrap(), &vec![]).unwrap();
+        assert!(matches!(frame.id(), Id::Standard(_)));
+
+        let frame = Frame::new(ExtendedId::new(0x1234567).unwrap(), &vec![]).unwrap();
+        assert!(matches!(frame.id(), Id::Extended(_)));
+    }
+
+    #[test]
+    fn frame_data() {
+        let frame = Frame::new(StandardId::new(0x123).unwrap(), &vec![0x11, 0x22, 0x33]).unwrap();
+        assert_eq!(frame.data(), &[0x11, 0x22, 0x33]);
+
+        let frame =
+            Frame::new(ExtendedId::new(0x1234567).unwrap(), &vec![0x11, 0x22, 0x33]).unwrap();
+        assert_eq!(frame.data(), &[0x11, 0x22, 0x33]);
+    }
+
+    #[test]
+    fn test_fd_dlc_to_len() {
+        assert_eq!(fd_dlc_to_len(0).unwrap(), 0);
+        assert_eq!(fd_dlc_to_len(8).unwrap(), 8);
+        assert_eq!(fd_dlc_to_len(9).unwrap(), 12);
+        assert_eq!(fd_dlc_to_len(15).unwrap(), 64);
+        assert!(fd_dlc_to_len(16).is_none());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_fd_len_to_dlc_invalid() {
+        fd_len_to_dlc(65).unwrap();
+    }
+
+    #[test]
+    fn test_fd_len_to_dlc() {
+        assert_eq!(fd_len_to_dlc(0).unwrap(), 0);
+        assert_eq!(fd_len_to_dlc(8).unwrap(), 8);
+        assert_eq!(fd_len_to_dlc(12).unwrap(), 9);
+        assert_eq!(fd_len_to_dlc(64).unwrap(), 15);
+        assert!(fd_len_to_dlc(65).is_none());
+    }
+}
