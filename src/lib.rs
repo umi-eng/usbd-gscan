@@ -102,7 +102,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
 
     /// Send a CAN frame to the host.
     ///
-    /// [`UsbDevice::poll()`] should be called immediately after to ensure the
+    /// [`usb_device::device::UsbDevice::poll()`] should be called immediately after to ensure the
     /// frame is sent correctly.
     // Whilst embedded_can::Frame doesn't support FD, we pass the flags separately.
     pub fn transmit(&mut self, interface: u16, frame: &impl embedded_can::Frame, flags: FrameFlag) {
