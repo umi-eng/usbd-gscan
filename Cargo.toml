@@ -5,6 +5,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/umi-eng/usbd-gscan"
+categories = ["no-std", "embedded", "network-programming"]
 
 [dependencies]
 bitflags = "2.13"
