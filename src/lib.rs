@@ -18,6 +18,10 @@ use zerocopy::IntoBytes;
 
 /// Interface class: vendor defined.
 pub const INTERFACE_CLASS: u8 = 0xFF;
+/// Device sub class.
+pub const DEVICE_SUB_CLASS: u8 = 0xFF;
+/// Device protocol.
+pub const DEVICE_PROTOCOL: u8 = 0xFF;
 
 const REQ_HOST_FORMAT: u8 = 0;
 const REQ_BIT_TIMING: u8 = 1;
@@ -125,7 +129,12 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         &self,
         writer: &mut DescriptorWriter,
     ) -> usb_device::Result<()> {
-        writer.interface(self.interface, INTERFACE_CLASS, 0xFF, 0xFF)?;
+        writer.interface(
+            self.interface,
+            INTERFACE_CLASS,
+            DEVICE_SUB_CLASS,
+            DEVICE_PROTOCOL,
+        )?;
         writer.endpoint(&self.write_endpoint)?;
         writer.endpoint(&self.read_endpoint)?;
 
