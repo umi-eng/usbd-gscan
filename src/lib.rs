@@ -363,7 +363,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
         };
 
-        frame.echo_id = 0; // tx complete
         self.timestamp_frame(&mut frame);
 
         self.device.receive(frame.interface, &frame);
