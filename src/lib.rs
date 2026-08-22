@@ -62,6 +62,11 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     out_queue: spsc::Queue<host::Frame, 64>,
     /// A frame half sent to the host
     out_frame: Option<host::Frame>,
+    /// Whether a transfer is currently in progress on the host endpoint.
+    ///
+    /// `out_frame` only tracks the second half of CAN-FD frames, so this is
+    /// also needed to track the first (and only) transfer of classic frames.
+    out_transfer_pending: bool,
     /// A frame half sent from the host
     in_frame: Option<host::Frame>,
 }
@@ -80,16 +85,31 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             interface_fd: [false; MAX_INTF],
             out_queue: Queue::new(),
             out_frame: None,
+            out_transfer_pending: false,
             in_frame: None,
         }
     }
 
+    pub fn timestamp_enabled(&self) -> bool {
+        self.device
+            .bit_timing()
+            .features
+            .intersects(Feature::HW_TIMESTAMP)
+    }
+
     fn enqueue_frame(&mut self, frame: host::Frame) {
-        if self.out_frame.is_none() {
-            if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
-                // first half write complete.
-                // defer second half of frame.
-                self.out_frame = Some(frame);
+        if self.out_frame.is_none() && !self.out_transfer_pending {
+            let frame_len = frame.len(self.timestamp_enabled());
+            let first_transfer_len = frame_len.min(self.write_endpoint.max_packet_size() as usize);
+            let first_transfer = &frame.as_bytes()[..first_transfer_len];
+
+            if self.write_endpoint.write(first_transfer).is_ok() {
+                self.out_transfer_pending = true;
+                // CAN-FD frames need a second transfer for the remaining
+                // payload. Classic CAN frames were sent in full above.
+                if frame.flags.intersects(FrameFlag::FD) && first_transfer_len < frame_len {
+                    self.out_frame = Some(frame);
+                }
             } else if self.out_queue.enqueue(frame).is_err() {
                 #[cfg(feature = "defmt")]
                 defmt::error!("Transmit queue full");
@@ -267,22 +287,40 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     }
 
     fn poll(&mut self) {
-        if self.out_frame.is_none() {
-            // attempt sending new frame.
-            if let Some(frame) = self.out_queue.peek() {
-                if self.write_endpoint.write(&frame.as_bytes()[..64]).is_ok() {
-                    let frame = self.out_queue.dequeue().unwrap(); // remove from queue
+        if self.out_transfer_pending {
+            return;
+        }
+
+        if let Some(frame) = self.out_frame.as_ref() {
+            // Attempt sending the remaining CAN-FD frame payload.
+            let frame_len = frame.len(self.timestamp_enabled());
+            let first_transfer_len = frame_len.min(self.write_endpoint.max_packet_size() as usize);
+            if self
+                .write_endpoint
+                .write(&frame.as_bytes()[first_transfer_len..frame_len])
+                .is_ok()
+            {
+                self.out_frame = None;
+                self.out_transfer_pending = true;
+            }
+        } else if let Some(frame) = self.out_queue.peek() {
+            // Attempt sending a new frame.
+            let frame_len = frame.len(self.timestamp_enabled());
+            let first_transfer_len = frame_len.min(self.write_endpoint.max_packet_size() as usize);
+            let first_transfer = &frame.as_bytes()[..first_transfer_len];
+
+            if self.write_endpoint.write(first_transfer).is_ok() {
+                let frame = self.out_queue.dequeue().unwrap(); // remove from queue
+                self.out_transfer_pending = true;
+                if frame.flags.intersects(FrameFlag::FD) && first_transfer_len < frame_len {
                     self.out_frame = Some(frame);
                 }
             }
-        } else {
-            // attempt sending second frame half.
-            self.out_frame
-                .take_if(|frame| self.write_endpoint.write(&frame.as_bytes()[64..76]).is_ok());
         }
     }
 
     fn endpoint_in_complete(&mut self, _addr: EndpointAddress) {
+        self.out_transfer_pending = false;
         self.poll();
     }
 
@@ -328,6 +366,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         self.interface_fd = [false; 3];
         self.out_queue = Queue::new();
         self.out_frame = None;
+        self.out_transfer_pending = false;
         self.in_frame = None;
     }
 }
