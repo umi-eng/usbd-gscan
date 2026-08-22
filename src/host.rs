@@ -293,6 +293,18 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// Set the hardware timestamp in microseconds.
+    ///
+    /// The timestamp is serialized only when [`Frame::len`] is called with
+    /// `timestamp` set to `true`.
+    pub fn set_timestamp(&mut self, timestamp_us: u32) {
+        if self.flags.intersects(FrameFlag::FD) {
+            self.can_data.can_fd_timestamp.timestamp_us = timestamp_us;
+        } else {
+            self.can_data.classic_can_timestamp.timestamp_us = timestamp_us;
+        }
+    }
+
     /// Length when serializing to USB data.
     pub fn len(&self, timestamp: bool) -> usize {
         const HEADER_LEN: usize = size_of::<Frame>() - size_of::<CanData>();
@@ -488,6 +500,20 @@ mod tests {
         let frame =
             Frame::new(ExtendedId::new(0x1234567).unwrap(), &vec![0x11, 0x22, 0x33]).unwrap();
         assert_eq!(frame.data(), &[0x11, 0x22, 0x33]);
+    }
+
+    #[test]
+    fn frame_timestamp() {
+        let mut frame = Frame::new(StandardId::new(0x123).unwrap(), &[]).unwrap();
+        frame.set_timestamp(0x12345678);
+        assert_eq!(frame.len(true), 24);
+        assert_eq!(&frame.as_bytes()[20..24], &0x12345678_u32.to_ne_bytes());
+
+        let mut frame = Frame::new(StandardId::new(0x123).unwrap(), &[0; 64]).unwrap();
+        frame.flags = FrameFlag::FD;
+        frame.set_timestamp(0x87654321);
+        assert_eq!(frame.len(true), 80);
+        assert_eq!(&frame.as_bytes()[76..80], &0x87654321_u32.to_ne_bytes());
     }
 
     #[test]
