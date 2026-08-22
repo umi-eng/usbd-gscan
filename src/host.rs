@@ -211,6 +211,10 @@ pub struct ClassicCan {
     _padding: [u8; 60],
 }
 
+impl ClassicCan {
+    const LEN: usize = 8;
+}
+
 #[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(C)]
@@ -218,6 +222,10 @@ pub struct ClassicCanTimestamp {
     pub data: [u8; 8],
     pub timestamp_us: u32,
     _padding: [u8; 56],
+}
+
+impl ClassicCanTimestamp {
+    const LEN: usize = 12;
 }
 
 #[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
@@ -228,12 +236,20 @@ pub struct CanFd {
     _padding: [u8; 4],
 }
 
+impl CanFd {
+    const LEN: usize = 64;
+}
+
 #[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(C)]
 pub struct CanFdTimestamp {
     pub data: [u8; 64],
     pub timestamp_us: u32,
+}
+
+impl CanFdTimestamp {
+    const LEN: usize = 68;
 }
 
 #[derive(Clone, Copy, FromBytes, IntoBytes, Immutable)]
@@ -274,6 +290,26 @@ pub struct Frame {
     pub flags: FrameFlag,
     _reserved0: u8,
     pub can_data: CanData,
+}
+
+impl Frame {
+    /// Length when serializing to USB data.
+    pub fn len(&self, timestamp: bool) -> usize {
+        const HEADER_LEN: usize = size_of::<Frame>() - size_of::<CanData>();
+        if self.flags.intersects(FrameFlag::FD) {
+            if timestamp {
+                HEADER_LEN + CanFdTimestamp::LEN
+            } else {
+                HEADER_LEN + CanFd::LEN
+            }
+        } else {
+            if timestamp {
+                HEADER_LEN + ClassicCanTimestamp::LEN
+            } else {
+                HEADER_LEN + ClassicCan::LEN
+            }
+        }
+    }
 }
 
 impl embedded_can::Frame for Frame {
