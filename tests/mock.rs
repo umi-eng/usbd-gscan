@@ -161,6 +161,49 @@ fn test_hardware_timestamp_not_advertised() {
 }
 
 #[test]
+fn test_timestamp_request() {
+    TestCtx {
+        features: Feature::HW_TIMESTAMP,
+        timestamp: 0x12345678,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let data = dev
+            .control_read(
+                &mut cls,
+                CtrRequestType::to_host().interface().vendor(),
+                6,
+                0,
+                0,
+                4,
+            )
+            .unwrap();
+        assert_eq!(data, 0x12345678_u32.to_le_bytes());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_timestamp_request_without_feature() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0x12345678,
+    }
+    .with_usb(|mut cls, mut dev| {
+        assert!(dev
+            .control_read(
+                &mut cls,
+                CtrRequestType::to_host().interface().vendor(),
+                6,
+                0,
+                0,
+                4,
+            )
+            .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
 fn test_host_format() {
     TestCtx {
         features: Feature::all(),

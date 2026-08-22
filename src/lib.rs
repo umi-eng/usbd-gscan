@@ -31,7 +31,6 @@ const REQ_MODE: u8 = 2;
 const REQ_BUS_ERROR: u8 = 3;
 const REQ_BIT_TIMING_CONST: u8 = 4;
 const REQ_DEVICE_CONFIG: u8 = 5;
-#[allow(unused)]
 const REQ_TIMESTAMP: u8 = 6;
 #[allow(unused)]
 const REQ_IDENTIFY: u8 = 7;
@@ -219,6 +218,15 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             }
             REQ_DEVICE_CONFIG => {
                 xfer.accept_with(self.device.config().as_bytes()).unwrap();
+            }
+            REQ_TIMESTAMP => {
+                if !self.timestamp_enabled() {
+                    xfer.reject().ok();
+                    return;
+                }
+
+                let timestamp = self.device.timestamp().to_le_bytes();
+                xfer.accept_with(&timestamp).unwrap();
             }
             REQ_BIT_TIMING_CONST_EXT => {
                 xfer.accept_with(self.device.bit_timing_ext().as_bytes())
