@@ -135,13 +135,22 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         frame.echo_id = u32::MAX; // set as receive frame
         frame.interface = interface as u8;
         frame.flags = flags;
+        self.timestamp_frame(&mut frame);
 
         self.enqueue_frame(frame);
     }
 
+    fn timestamp_frame(&self, frame: &mut host::Frame) {
+        if self.timestamp_enabled() {
+            frame.set_timestamp(self.device.timestamp());
+        }
+    }
+
     /// Send an error frame to the host.
     pub fn transmit_error(&mut self, interface: u16, error: errors::Error) {
-        self.enqueue_frame(error.to_err_frame(interface as u8));
+        let mut frame = error.to_err_frame(interface as u8);
+        self.timestamp_frame(&mut frame);
+        self.enqueue_frame(frame);
     }
 }
 
@@ -355,6 +364,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
         };
 
         frame.echo_id = 0; // tx complete
+        self.timestamp_frame(&mut frame);
 
         self.device.receive(frame.interface, &frame);
 
@@ -397,6 +407,14 @@ pub trait Device {
 
     /// Returns the device state including TX and RX error counters.
     fn state(&self, interface: u8) -> DeviceState;
+
+    /// Returns the current hardware timer value in microseconds.
+    ///
+    /// This is called only when [`Feature::HW_TIMESTAMP`] is advertised by
+    /// [`DeviceBitTimingConst::features`].
+    fn timestamp(&self) -> u32 {
+        0
+    }
 
     /// Called when a frame is received from the host.
     fn receive(&mut self, interface: u8, frame: &host::Frame);
