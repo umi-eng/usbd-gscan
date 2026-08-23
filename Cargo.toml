@@ -1,7 +1,7 @@
 [package]
 name = "usbd-gscan"
 description = "Driver for the Geschwister Schneider USB/CAN protocol."
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/umi-eng/usbd-gscan"
