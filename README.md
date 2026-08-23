@@ -5,9 +5,10 @@ An implementation of the Geschwister Schneider USB/CAN protocol.
 ## Features
 
 - Classic CAN and CAN FD frames.
-- Bitrate switching configuration.
+- FD bitrate switching configuration.
 - Error reporting frames.
 - Outgoing frame buffer.
+- Hardware timestamp.
 
 ## Limitations
 
