@@ -81,3 +81,27 @@ pub const EXT_PROP_FEATURE_DESC: &[u8] = &[
 	0x33, 0x00, 0x7d, 0x00,
 	0x00, 0x00, 0x00, 0x00
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn descriptors_have_the_declared_lengths() {
+        assert_eq!(STRING_DESC.len(), STRING_DESC[0] as usize);
+        assert_eq!(
+            ID_FEATURE_DESC.len(),
+            u32::from_le_bytes(ID_FEATURE_DESC[0..4].try_into().unwrap()) as usize
+        );
+        assert_eq!(
+            EXT_PROP_FEATURE_DESC.len(),
+            u32::from_le_bytes(EXT_PROP_FEATURE_DESC[0..4].try_into().unwrap()) as usize
+        );
+    }
+
+    #[test]
+    fn compatible_id_descriptor_contains_winusb_for_both_interfaces() {
+        assert_eq!(&ID_FEATURE_DESC[18..26], b"WINUSB\0\0");
+        assert_eq!(&ID_FEATURE_DESC[42..50], b"WINUSB\0\0");
+    }
+}
