@@ -226,3 +226,47 @@ fn test_host_format() {
     })
     .expect("with_usb")
 }
+
+#[test]
+fn test_invalid_interface_request_is_rejected() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        assert!(dev
+            .control_write(
+                &mut cls,
+                CtrRequestType::to_device().class().vendor(),
+                2,
+                3,
+                0,
+                8,
+                &[0; 8],
+            )
+            .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_malformed_mode_request_is_rejected() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        assert!(dev
+            .control_write(
+                &mut cls,
+                CtrRequestType::to_device().class().vendor(),
+                2,
+                0,
+                0,
+                4,
+                &[0; 4],
+            )
+            .is_err());
+    })
+    .expect("with_usb");
+}

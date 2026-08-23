@@ -145,6 +145,10 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
         }
     }
 
+    fn interface_index(interface: u16) -> Option<usize> {
+        (interface < MAX_INTF as u16).then_some(interface as usize)
+    }
+
     /// Send an error frame to the host.
     pub fn transmit_error(&mut self, interface: u16, error: errors::Error) {
         let mut frame = error.to_err_frame(interface as u8);
@@ -233,7 +237,18 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .unwrap();
             }
             REQ_GET_STATE => {
-                let interface = req.value as u8;
+                let interface = match Self::interface_index(req.value) {
+                    Some(interface) => interface as u8,
+                    None => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!(
+                            "Invalid interface index in get-state request: {}",
+                            req.value
+                        );
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
                 xfer.accept_with(self.device.state(interface).as_bytes())
                     .unwrap();
             }
@@ -264,25 +279,78 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     return;
                 }
 
-                let config = HostConfig::read_from_bytes(xfer.data()).unwrap();
-                assert_eq!(
-                    config.byte_order, 0x0000beef,
-                    "Byte order check mismatch. Big endian not currently supported.",
-                );
+                let config = match HostConfig::read_from_bytes(xfer.data()) {
+                    Ok(config) => config,
+                    Err(_) => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Invalid host format request payload");
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
+                if config.byte_order != 0x0000beef {
+                    #[cfg(feature = "defmt")]
+                    defmt::error!("Unsupported host byte order: {}", config.byte_order);
+                    xfer.reject().ok();
+                    return;
+                }
                 xfer.accept().unwrap();
             }
             REQ_BIT_TIMING => {
-                let timing = DeviceBitTiming::read_from_bytes(xfer.data()).unwrap();
-                let interface = req.value as u8;
+                let interface = match Self::interface_index(req.value) {
+                    Some(interface) => interface as u8,
+                    None => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!(
+                            "Invalid interface index in bit-timing request: {}",
+                            req.value
+                        );
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
+                let timing = match DeviceBitTiming::read_from_bytes(xfer.data()) {
+                    Ok(timing) => timing,
+                    Err(_) => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Invalid bit-timing request payload");
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
                 self.device.configure_bit_timing(interface, timing);
                 xfer.accept().unwrap();
             }
             REQ_MODE => {
-                let device_mode = DeviceMode::read_from_bytes(xfer.data()).unwrap();
-                let interface = req.value as u8;
+                let interface = match Self::interface_index(req.value) {
+                    Some(interface) => interface as u8,
+                    None => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Invalid interface index in mode request: {}", req.value);
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
+                let device_mode = match DeviceMode::read_from_bytes(xfer.data()) {
+                    Ok(device_mode) => device_mode,
+                    Err(_) => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Invalid mode request payload");
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
+                let mode = match host::Mode::try_from(device_mode.mode) {
+                    Ok(mode) => mode,
+                    Err(_) => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Invalid mode value: {}", device_mode.mode);
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
                 // store interface configuration.
                 self.interface_fd[interface as usize] = device_mode.flags.intersects(Feature::FD);
-                let mode = host::Mode::try_from(device_mode.mode).unwrap();
                 match mode {
                     host::Mode::Reset => self.device.reset(interface),
                     host::Mode::Start => self.device.start(interface, device_mode.flags),
@@ -290,8 +358,27 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 xfer.accept().unwrap();
             }
             REQ_BIT_TIMING_DATA => {
-                let timing = DeviceBitTiming::read_from_bytes(xfer.data()).unwrap();
-                let interface = req.value as u8;
+                let interface = match Self::interface_index(req.value) {
+                    Some(interface) => interface as u8,
+                    None => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!(
+                            "Invalid interface index in data-bit-timing request: {}",
+                            req.value
+                        );
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
+                let timing = match DeviceBitTiming::read_from_bytes(xfer.data()) {
+                    Ok(timing) => timing,
+                    Err(_) => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!("Invalid data-bit-timing request payload");
+                        xfer.reject().ok();
+                        return;
+                    }
+                };
                 self.device.configure_bit_timing_data(interface, timing);
                 xfer.accept().unwrap();
             }
@@ -354,7 +441,20 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .read(&mut frame.as_mut_bytes()[..64])
                     .unwrap();
 
-                if self.interface_fd[frame.interface as usize] {
+                let interface = match Self::interface_index(frame.interface as u16) {
+                    Some(interface) => interface,
+                    None => {
+                        #[cfg(feature = "defmt")]
+                        defmt::error!(
+                            "Invalid interface index in received frame: {}",
+                            frame.interface
+                        );
+                        self.read_endpoint.stall();
+                        return;
+                    }
+                };
+
+                if self.interface_fd[interface] {
                     self.in_frame = Some(frame);
                     return;
                 }
