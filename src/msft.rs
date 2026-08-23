@@ -1,4 +1,4 @@
-//! Micorsoft OS Feature Descriptors
+//! Microsoft OS 1.0 descriptors used by Windows to select WinUSB.
 
 use usb_device::descriptor::descriptor_type;
 
