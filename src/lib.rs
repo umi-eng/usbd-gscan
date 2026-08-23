@@ -186,7 +186,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             && req.request == 6
             && req.value == 0x03EE
         {
-            let length = req.length as usize;
+            let length = (req.length as usize).min(msft::STRING_DESC.len());
             xfer.accept_with(&msft::STRING_DESC[..length]).unwrap();
             return;
         }
@@ -197,7 +197,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             && req.index == 4
             && req.value == 0
         {
-            let length = req.length as usize;
+            let length = (req.length as usize).min(msft::ID_FEATURE_DESC.len());
             xfer.accept_with(&msft::ID_FEATURE_DESC[..length]).unwrap();
             return;
         }
@@ -208,7 +208,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             && req.index == 5
             && req.value == 0
         {
-            let length = req.length as usize;
+            let length = (req.length as usize).min(msft::EXT_PROP_FEATURE_DESC.len());
             xfer.accept_with(&msft::EXT_PROP_FEATURE_DESC[..length])
                 .unwrap();
             return;
