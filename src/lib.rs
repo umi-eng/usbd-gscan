@@ -56,7 +56,6 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
-    interface_fd: [bool; MAX_INTF],
     /// Whether each interface requested packets padded to the endpoint maximum.
     interface_pad_packets: [bool; MAX_INTF],
     /// Frames waiting to be sent to the host
@@ -83,7 +82,6 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             write_endpoint: alloc.bulk(64),
             read_endpoint: alloc.bulk(64),
             device,
-            interface_fd: [false; MAX_INTF],
             interface_pad_packets: [false; MAX_INTF],
             out_queue: Queue::new(),
             out_frame: None,
@@ -99,13 +97,36 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             .intersects(Feature::HW_TIMESTAMP)
     }
 
+    fn write_frame(&mut self, frame: &host::Frame) -> Option<usize> {
+        let frame_len = frame.len(self.timestamp_enabled());
+        let max_packet_size = self.write_endpoint.max_packet_size() as usize;
+        let interface_index = Self::interface_index(frame.interface as u16)?;
+        let pad_packet =
+            self.interface_pad_packets[interface_index] && !frame.flags.intersects(FrameFlag::FD);
+
+        // WinUSB works reliably with classic CAN frames only when each
+        // transfer is exactly one full USB packet, as in candleLight.
+        if pad_packet {
+            let mut padded = [0u8; 64];
+            padded[..frame_len].copy_from_slice(&frame.as_bytes()[..frame_len]);
+            self.write_endpoint
+                .write(&padded[..max_packet_size])
+                .ok()
+                .map(|_| max_packet_size)
+        } else {
+            let first_transfer_len = frame_len.min(max_packet_size);
+            self.write_endpoint
+                .write(&frame.as_bytes()[..first_transfer_len])
+                .ok()
+                .map(|_| first_transfer_len)
+        }
+    }
+
     fn enqueue_frame(&mut self, frame: host::Frame) {
         if self.out_frame.is_none() && !self.out_transfer_pending {
             let frame_len = frame.len(self.timestamp_enabled());
-            let first_transfer_len = frame_len.min(self.write_endpoint.max_packet_size() as usize);
-            let first_transfer = &frame.as_bytes()[..first_transfer_len];
 
-            if self.write_endpoint.write(first_transfer).is_ok() {
+            if let Some(first_transfer_len) = self.write_frame(&frame) {
                 self.out_transfer_pending = true;
                 // CAN-FD frames need a second transfer for the remaining
                 // payload. Classic CAN frames were sent in full above.
@@ -354,7 +375,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 };
                 let interface = interface_index as u8;
                 // Store interface configuration.
-                self.interface_fd[interface_index] = device_mode.flags.intersects(Feature::FD);
                 self.interface_pad_packets[interface_index] = device_mode
                     .flags
                     .intersects(Feature::PAD_PKTS_TO_MAX_PKT_SIZE);
@@ -414,43 +434,20 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 self.out_frame = None;
                 self.out_transfer_pending = true;
             }
-        } else if let Some(frame) = self.out_queue.peek() {
+        } else if let Some(frame) = self.out_queue.peek().copied() {
             // Attempt sending a new frame.
             let frame_len = frame.len(self.timestamp_enabled());
-            let max_packet_size = self.write_endpoint.max_packet_size() as usize;
-            let interface_index = match Self::interface_index(frame.interface as u16) {
-                Some(interface_index) => interface_index,
-                None => {
-                    #[cfg(feature = "defmt")]
-                    defmt::error!(
-                        "Invalid interface index in queued frame: {}",
-                        frame.interface
-                    );
-                    let _ = self.out_queue.dequeue();
-                    return;
-                }
-            };
-            let pad_packet = self.interface_pad_packets[interface_index]
-                && !frame.flags.intersects(FrameFlag::FD);
 
-            // WinUSB works reliably with classic CAN frames only when each
-            // transfer is exactly one full USB packet, as in candleLight.
-            let mut padded = [0u8; 64];
-            let first_transfer = if pad_packet {
-                padded[..frame_len].copy_from_slice(&frame.as_bytes()[..frame_len]);
-                &padded[..max_packet_size]
-            } else {
-                let first_transfer_len = frame_len.min(max_packet_size);
-                &frame.as_bytes()[..first_transfer_len]
-            };
-            let first_transfer_len = first_transfer.len();
-
-            if self.write_endpoint.write(first_transfer).is_ok() {
+            if let Some(first_transfer_len) = self.write_frame(&frame) {
                 let frame = self.out_queue.dequeue().unwrap(); // remove from queue
                 self.out_transfer_pending = true;
                 if frame.flags.intersects(FrameFlag::FD) && first_transfer_len < frame_len {
                     self.out_frame = Some(frame);
                 }
+            } else {
+                #[cfg(feature = "defmt")]
+                defmt::error!("Dropping queued frame with invalid interface");
+                let _ = self.out_queue.dequeue();
             }
         }
     }
@@ -473,20 +470,18 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     .read(&mut frame.as_mut_bytes()[..64])
                     .unwrap();
 
-                let interface = match Self::interface_index(frame.interface as u16) {
-                    Some(interface) => interface,
-                    None => {
-                        #[cfg(feature = "defmt")]
-                        defmt::error!(
-                            "Invalid interface index in received frame: {}",
-                            frame.interface
-                        );
-                        self.read_endpoint.stall();
-                        return;
-                    }
-                };
+                if Self::interface_index(frame.interface as u16).is_none() {
+                    #[cfg(feature = "defmt")]
+                    defmt::error!(
+                        "Invalid interface index in received frame: {}",
+                        frame.interface
+                    );
+                    self.read_endpoint.stall();
+                    return;
+                }
 
-                if self.interface_fd[interface] {
+                // CAN FD frames are split over multiple USB transfers.
+                if frame.flags.intersects(FrameFlag::FD) {
                     self.in_frame = Some(frame);
                     return;
                 }
@@ -512,7 +507,6 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
     fn reset(&mut self) {
         // reset internal state
-        self.interface_fd = [false; MAX_INTF];
         self.interface_pad_packets = [false; MAX_INTF];
         self.out_queue = Queue::new();
         self.out_frame = None;
