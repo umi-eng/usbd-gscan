@@ -56,6 +56,8 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
+    /// Whether each interface is configured for CAN-FD transfer framing.
+    interface_fd: [bool; MAX_INTF],
     /// Whether each interface requested packets padded to the endpoint maximum.
     interface_pad_packets: [bool; MAX_INTF],
     /// Frames waiting to be sent to the host
@@ -82,6 +84,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             write_endpoint: alloc.bulk(64),
             read_endpoint: alloc.bulk(64),
             device,
+            interface_fd: [false; MAX_INTF],
             interface_pad_packets: [false; MAX_INTF],
             out_queue: Queue::new(),
             out_frame: None,
@@ -374,7 +377,10 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     }
                 };
                 let interface = interface_index as u8;
-                // Store Windows-specific packet padding configuration.
+                // Linux uses the CAN-FD transfer layout for all frames when the
+                // interface is in FD mode. Windows may additionally request
+                // padding classic CAN transfers to the endpoint size.
+                self.interface_fd[interface_index] = device_mode.flags.intersects(Feature::FD);
                 self.interface_pad_packets[interface_index] = device_mode
                     .flags
                     .intersects(Feature::PAD_PKTS_TO_MAX_PKT_SIZE);
@@ -484,7 +490,10 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 // CAN-FD frames are split over multiple USB transfers. A
                 // short first packet is already a complete frame, though, so
                 // do not wait for a nonexistent continuation.
-                if frame.flags.intersects(FrameFlag::FD) && packet_len == 64 {
+                if (self.interface_fd[frame.interface as usize]
+                    || frame.flags.intersects(FrameFlag::FD))
+                    && packet_len == 64
+                {
                     self.in_frame = Some(frame);
                     return;
                 }
@@ -501,11 +510,17 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 };
                 self.in_frame = None;
 
-                // A CAN-FD frame in the split layout has exactly 16 bytes in
-                // its second USB packet. Drop malformed/incomplete frames.
-                if packet_len != 16 {
+                // Linux uses a 64-byte first transfer for the FD-mode layout.
+                // Linux may omit the host-to-device timestamp even when
+                // timestamps are enabled on the device. Consequently, the
+                // fixed data area can be either 76 or 80 bytes total, leaving
+                // a 12- or 16-byte continuation after the first 64 bytes.
+                if !matches!(packet_len, 12 | 16) {
                     #[cfg(feature = "defmt")]
-                    defmt::warn!("Invalid CAN-FD continuation length: {}", packet_len);
+                    defmt::warn!(
+                        "Invalid CAN-FD continuation length: {}, expected 12 or 16",
+                        packet_len
+                    );
                     return;
                 }
 
@@ -522,6 +537,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
     fn reset(&mut self) {
         // reset internal state
+        self.interface_fd = [false; MAX_INTF];
         self.interface_pad_packets = [false; MAX_INTF];
         self.out_queue = Queue::new();
         self.out_frame = None;
