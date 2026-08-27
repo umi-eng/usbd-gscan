@@ -56,6 +56,8 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
+    /// Whether each interface is configured for CAN-FD transfer framing.
+    interface_fd: [bool; MAX_INTF],
     /// Whether each interface requested packets padded to the endpoint maximum.
     interface_pad_packets: [bool; MAX_INTF],
     /// Frames waiting to be sent to the host
@@ -82,6 +84,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             write_endpoint: alloc.bulk(64),
             read_endpoint: alloc.bulk(64),
             device,
+            interface_fd: [false; MAX_INTF],
             interface_pad_packets: [false; MAX_INTF],
             out_queue: Queue::new(),
             out_frame: None,
@@ -374,7 +377,9 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     }
                 };
                 let interface = interface_index as u8;
-                // Store interface configuration.
+                // Store interface configuration separately for transfer framing and
+                // Windows-specific packet padding.
+                self.interface_fd[interface_index] = device_mode.flags.intersects(Feature::FD);
                 self.interface_pad_packets[interface_index] = device_mode
                     .flags
                     .intersects(Feature::PAD_PKTS_TO_MAX_PKT_SIZE);
@@ -480,8 +485,9 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                     return;
                 }
 
-                // CAN FD frames are split over multiple USB transfers.
-                if frame.flags.intersects(FrameFlag::FD) {
+                // In CAN-FD mode, Linux uses the CAN-FD transfer layout even
+                // when the individual frame is a classic CAN frame.
+                if self.interface_fd[frame.interface as usize] {
                     self.in_frame = Some(frame);
                     return;
                 }
@@ -507,6 +513,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
     fn reset(&mut self) {
         // reset internal state
+        self.interface_fd = [false; MAX_INTF];
         self.interface_pad_packets = [false; MAX_INTF];
         self.out_queue = Queue::new();
         self.out_frame = None;
