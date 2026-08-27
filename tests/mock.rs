@@ -304,6 +304,38 @@ fn test_short_classic_frame_is_processed_without_fd_continuation() {
 }
 
 #[test]
+fn test_fd_frame_accepts_short_continuation_with_timestamp_enabled() {
+    TestCtx {
+        features: Feature::FD | Feature::HW_TIMESTAMP,
+        timestamp: 0x12345678,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let mut frame =
+            Frame::new(embedded_can::StandardId::new(0x123).unwrap(), &[0; 64]).unwrap();
+        frame.flags = FrameFlag::FD;
+
+        // Linux can omit the host-to-device timestamp, leaving a 12-byte
+        // continuation even when hardware timestamps are enabled.
+        dev.ep_write(&mut cls, 1, &frame.as_bytes()[..64]).unwrap();
+        let mut echoed = [0u8; 128];
+        let result = dev
+            .ep_raw(
+                &mut cls,
+                1,
+                None,
+                Some(&frame.as_bytes()[64..76]),
+                &mut echoed,
+            )
+            .unwrap();
+
+        assert_eq!(result.read, Some(80));
+        assert_eq!(&echoed[..76], &frame.as_bytes()[..76]);
+        assert_eq!(&echoed[76..80], &0x12345678_u32.to_ne_bytes());
+    })
+    .expect("with_usb");
+}
+
+#[test]
 fn test_invalid_fd_continuation_is_dropped_and_state_recovers() {
     TestCtx {
         features: Feature::FD,
