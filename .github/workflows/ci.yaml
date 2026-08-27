@@ -10,18 +10,12 @@ jobs:
   format:
     name: Format
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - "1.87" # MSRV
-          - stable
-          - nightly
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         id: toolchain
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           components: rustfmt, clippy
       - run: cargo +${{steps.toolchain.outputs.name}} fmt --all -- --check
 
@@ -31,6 +25,7 @@ jobs:
     strategy:
       matrix:
         rust:
+          - "1.87" # MSRV
           - stable
           - nightly
     steps:
@@ -48,6 +43,7 @@ jobs:
     strategy:
       matrix:
         rust:
+          - "1.87" # MSRV
           - stable
           - nightly
     steps:
