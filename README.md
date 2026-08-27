@@ -9,6 +9,7 @@ An implementation of the Geschwister Schneider USB/CAN protocol.
 - Error reporting frames.
 - Outgoing frame buffer.
 - Hardware timestamp.
+- Windows support with WinUSB descriptors.
 
 ## Limitations
 

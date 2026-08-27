@@ -1,4 +1,4 @@
-//! Micorsoft OS Feature Descriptors
+//! Microsoft OS 1.0 descriptors used by Windows to select WinUSB.
 
 use usb_device::descriptor::descriptor_type;
 
@@ -18,10 +18,10 @@ pub const STRING_DESC: &[u8] = &[
 /// Compatible ID feature descriptor
 #[rustfmt::skip]
 pub const ID_FEATURE_DESC: &[u8] = &[
-    0x10, 0x00, 0x00, 0x00, // length (0x00000010)
+    0x40, 0x00, 0x00, 0x00, // length (0x00000040)
 	0x00, 0x01,             // BCD version 1.0
 	0x04, 0x00,             // feature description index (0x0004)
-	0x02,                   // number of custom property sections
+	0x02,                   // number of compatible ID sections
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reserved
 
 	0x00,                   // interface number
@@ -60,7 +60,7 @@ pub const EXT_PROP_FEATURE_DESC: &[u8] = &[
 	b'D', 0x00, b's', 0x00,
 	b'\0', 0x00,
 	0x50, 0x00, 0x00, 0x00, // property data length
-	0x7b, 0x00, 0x63, 0x00, // property name: "{C15B4308-04D3-11E6-B3EA-6057189E6443}\0\0"
+    0x7b, 0x00, 0x63, 0x00, // property data: "{C15B4308-04D3-11E6-B3EA-6057189E6443}\\0\\0"
 	0x31, 0x00, 0x35, 0x00,
 	0x62, 0x00, 0x34, 0x00,
 	0x33, 0x00, 0x30, 0x00,
@@ -81,3 +81,27 @@ pub const EXT_PROP_FEATURE_DESC: &[u8] = &[
 	0x33, 0x00, 0x7d, 0x00,
 	0x00, 0x00, 0x00, 0x00
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn descriptors_have_the_declared_lengths() {
+        assert_eq!(STRING_DESC.len(), STRING_DESC[0] as usize);
+        assert_eq!(
+            ID_FEATURE_DESC.len(),
+            u32::from_le_bytes(ID_FEATURE_DESC[0..4].try_into().unwrap()) as usize
+        );
+        assert_eq!(
+            EXT_PROP_FEATURE_DESC.len(),
+            u32::from_le_bytes(EXT_PROP_FEATURE_DESC[0..4].try_into().unwrap()) as usize
+        );
+    }
+
+    #[test]
+    fn compatible_id_descriptor_contains_winusb_for_both_interfaces() {
+        assert_eq!(&ID_FEATURE_DESC[18..26], b"WINUSB\0\0");
+        assert_eq!(&ID_FEATURE_DESC[42..50], b"WINUSB\0\0");
+    }
+}

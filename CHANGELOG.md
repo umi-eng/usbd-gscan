@@ -2,6 +2,8 @@
 
 # [Unreleased]
 
+- Fix and validate Windows support.
+
 # v0.2.0
 
 - Only use a single USB transfer when possible.

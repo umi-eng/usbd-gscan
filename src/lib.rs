@@ -56,7 +56,10 @@ pub struct GsCan<'a, B: UsbBus, D: Device> {
     write_endpoint: EndpointIn<'a, B>,
     read_endpoint: EndpointOut<'a, B>,
     pub device: D,
+    /// Whether each interface is configured for CAN-FD transfer framing.
     interface_fd: [bool; MAX_INTF],
+    /// Whether each interface requested packets padded to the endpoint maximum.
+    interface_pad_packets: [bool; MAX_INTF],
     /// Frames waiting to be sent to the host
     out_queue: spsc::Queue<host::Frame, 64>,
     /// A frame half sent to the host
@@ -82,6 +85,7 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             read_endpoint: alloc.bulk(64),
             device,
             interface_fd: [false; MAX_INTF],
+            interface_pad_packets: [false; MAX_INTF],
             out_queue: Queue::new(),
             out_frame: None,
             out_transfer_pending: false,
@@ -96,13 +100,36 @@ impl<'a, B: UsbBus, D: Device> GsCan<'a, B, D> {
             .intersects(Feature::HW_TIMESTAMP)
     }
 
+    fn write_frame(&mut self, frame: &host::Frame) -> Option<usize> {
+        let frame_len = frame.len(self.timestamp_enabled());
+        let max_packet_size = self.write_endpoint.max_packet_size() as usize;
+        let interface_index = Self::interface_index(frame.interface as u16)?;
+        let pad_packet =
+            self.interface_pad_packets[interface_index] && !frame.flags.intersects(FrameFlag::FD);
+
+        // WinUSB works reliably with classic CAN frames only when each
+        // transfer is exactly one full USB packet, as in candleLight.
+        if pad_packet {
+            let mut padded = [0u8; 64];
+            padded[..frame_len].copy_from_slice(&frame.as_bytes()[..frame_len]);
+            self.write_endpoint
+                .write(&padded[..max_packet_size])
+                .ok()
+                .map(|_| max_packet_size)
+        } else {
+            let first_transfer_len = frame_len.min(max_packet_size);
+            self.write_endpoint
+                .write(&frame.as_bytes()[..first_transfer_len])
+                .ok()
+                .map(|_| first_transfer_len)
+        }
+    }
+
     fn enqueue_frame(&mut self, frame: host::Frame) {
         if self.out_frame.is_none() && !self.out_transfer_pending {
             let frame_len = frame.len(self.timestamp_enabled());
-            let first_transfer_len = frame_len.min(self.write_endpoint.max_packet_size() as usize);
-            let first_transfer = &frame.as_bytes()[..first_transfer_len];
 
-            if self.write_endpoint.write(first_transfer).is_ok() {
+            if let Some(first_transfer_len) = self.write_frame(&frame) {
                 self.out_transfer_pending = true;
                 // CAN-FD frames need a second transfer for the remaining
                 // payload. Classic CAN frames were sent in full above.
@@ -183,7 +210,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             && req.request == 6
             && req.value == 0x03EE
         {
-            let length = req.length as usize;
+            let length = (req.length as usize).min(msft::STRING_DESC.len());
             xfer.accept_with(&msft::STRING_DESC[..length]).unwrap();
             return;
         }
@@ -194,7 +221,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             && req.index == 4
             && req.value == 0
         {
-            let length = req.length as usize;
+            let length = (req.length as usize).min(msft::ID_FEATURE_DESC.len());
             xfer.accept_with(&msft::ID_FEATURE_DESC[..length]).unwrap();
             return;
         }
@@ -205,7 +232,7 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
             && req.index == 5
             && req.value == 0
         {
-            let length = req.length as usize;
+            let length = (req.length as usize).min(msft::EXT_PROP_FEATURE_DESC.len());
             xfer.accept_with(&msft::EXT_PROP_FEATURE_DESC[..length])
                 .unwrap();
             return;
@@ -322,8 +349,8 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 xfer.accept().unwrap();
             }
             REQ_MODE => {
-                let interface = match Self::interface_index(req.value) {
-                    Some(interface) => interface as u8,
+                let interface_index = match Self::interface_index(req.value) {
+                    Some(interface_index) => interface_index,
                     None => {
                         #[cfg(feature = "defmt")]
                         defmt::error!("Invalid interface index in mode request: {}", req.value);
@@ -349,8 +376,14 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                         return;
                     }
                 };
-                // store interface configuration.
-                self.interface_fd[interface as usize] = device_mode.flags.intersects(Feature::FD);
+                let interface = interface_index as u8;
+                // Linux uses the CAN-FD transfer layout for all frames when the
+                // interface is in FD mode. Windows may additionally request
+                // padding classic CAN transfers to the endpoint size.
+                self.interface_fd[interface_index] = device_mode.flags.intersects(Feature::FD);
+                self.interface_pad_packets[interface_index] = device_mode
+                    .flags
+                    .intersects(Feature::PAD_PKTS_TO_MAX_PKT_SIZE);
                 match mode {
                     host::Mode::Reset => self.device.reset(interface),
                     host::Mode::Start => self.device.start(interface, device_mode.flags),
@@ -407,18 +440,20 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 self.out_frame = None;
                 self.out_transfer_pending = true;
             }
-        } else if let Some(frame) = self.out_queue.peek() {
+        } else if let Some(frame) = self.out_queue.peek().copied() {
             // Attempt sending a new frame.
             let frame_len = frame.len(self.timestamp_enabled());
-            let first_transfer_len = frame_len.min(self.write_endpoint.max_packet_size() as usize);
-            let first_transfer = &frame.as_bytes()[..first_transfer_len];
 
-            if self.write_endpoint.write(first_transfer).is_ok() {
+            if let Some(first_transfer_len) = self.write_frame(&frame) {
                 let frame = self.out_queue.dequeue().unwrap(); // remove from queue
                 self.out_transfer_pending = true;
                 if frame.flags.intersects(FrameFlag::FD) && first_transfer_len < frame_len {
                     self.out_frame = Some(frame);
                 }
+            } else {
+                #[cfg(feature = "defmt")]
+                defmt::error!("Dropping queued frame with invalid interface");
+                let _ = self.out_queue.dequeue();
             }
         }
     }
@@ -429,32 +464,36 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
     }
 
     fn endpoint_out(&mut self, addr: EndpointAddress) {
-        // filter endpoint address.
-        if addr.index() != 2 {
+        // Filter endpoint address.
+        if addr != self.read_endpoint.address() {
             return;
         }
 
         let mut frame = match self.in_frame {
             None => {
                 let mut frame = host::Frame::new_zeroed();
-                self.read_endpoint
-                    .read(&mut frame.as_mut_bytes()[..64])
-                    .unwrap();
-
-                let interface = match Self::interface_index(frame.interface as u16) {
-                    Some(interface) => interface,
-                    None => {
-                        #[cfg(feature = "defmt")]
-                        defmt::error!(
-                            "Invalid interface index in received frame: {}",
-                            frame.interface
-                        );
-                        self.read_endpoint.stall();
-                        return;
-                    }
+                let packet_len = match self.read_endpoint.read(&mut frame.as_mut_bytes()[..64]) {
+                    Ok(packet_len) => packet_len,
+                    Err(_) => return,
                 };
 
-                if self.interface_fd[interface] {
+                if Self::interface_index(frame.interface as u16).is_none() {
+                    #[cfg(feature = "defmt")]
+                    defmt::error!(
+                        "Invalid interface index in received frame: {}",
+                        frame.interface
+                    );
+                    self.read_endpoint.stall();
+                    return;
+                }
+
+                // CAN-FD frames are split over multiple USB transfers. A
+                // short first packet is already a complete frame, though, so
+                // do not wait for a nonexistent continuation.
+                if (self.interface_fd[frame.interface as usize]
+                    || frame.flags.intersects(FrameFlag::FD))
+                    && packet_len == 64
+                {
                     self.in_frame = Some(frame);
                     return;
                 }
@@ -462,10 +501,28 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
                 frame
             }
             Some(mut frame) => {
-                self.read_endpoint
-                    .read(&mut frame.as_mut_bytes()[64..])
-                    .unwrap();
+                let packet_len = match self.read_endpoint.read(&mut frame.as_mut_bytes()[64..]) {
+                    Ok(packet_len) => packet_len,
+                    Err(_) => {
+                        self.in_frame = None;
+                        return;
+                    }
+                };
                 self.in_frame = None;
+
+                // Linux uses a 64-byte first transfer for the FD-mode layout.
+                // Linux may omit the host-to-device timestamp even when
+                // timestamps are enabled on the device. Consequently, the
+                // fixed data area can be either 76 or 80 bytes total, leaving
+                // a 12- or 16-byte continuation after the first 64 bytes.
+                if !matches!(packet_len, 12 | 16) {
+                    #[cfg(feature = "defmt")]
+                    defmt::warn!(
+                        "Invalid CAN-FD continuation length: {}, expected 12 or 16",
+                        packet_len
+                    );
+                    return;
+                }
 
                 frame
             }
@@ -480,7 +537,8 @@ impl<B: UsbBus, D: Device> UsbClass<B> for GsCan<'_, B, D> {
 
     fn reset(&mut self) {
         // reset internal state
-        self.interface_fd = [false; 3];
+        self.interface_fd = [false; MAX_INTF];
+        self.interface_pad_packets = [false; MAX_INTF];
         self.out_queue = Queue::new();
         self.out_frame = None;
         self.out_transfer_pending = false;

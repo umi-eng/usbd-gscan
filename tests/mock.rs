@@ -11,6 +11,7 @@ use usbd_gscan::host::Frame;
 use usbd_gscan::host::FrameFlag;
 use usbd_gscan::Device;
 use usbd_gscan::GsCan;
+use zerocopy::IntoBytes;
 
 const TIMING_NOMINAL: CanBitTimingConst = CanBitTimingConst {
     tseg1_min: 1,
@@ -267,6 +268,102 @@ fn test_malformed_mode_request_is_rejected() {
                 &[0; 4],
             )
             .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_short_classic_frame_is_processed_without_fd_continuation() {
+    TestCtx {
+        features: Feature::FD,
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let frame = Frame::new(embedded_can::StandardId::new(0x123).unwrap(), &[1, 2, 3]).unwrap();
+
+        // A short classic frame must not be treated as an FD continuation
+        // merely because FD is supported.
+        let frame_len = frame.len(false);
+        assert_eq!(frame_len, 20);
+        // `ep_raw` drives the class callback synchronously. Supplying an IN
+        // buffer also lets the harness consume the echoed frame.
+        let mut echoed = [0u8; 64];
+        let result = dev
+            .ep_raw(
+                &mut cls,
+                1,
+                None,
+                Some(&frame.as_bytes()[..frame_len]),
+                &mut echoed,
+            )
+            .unwrap();
+        assert_eq!(result.read, Some(frame_len));
+        assert_eq!(&echoed[..frame_len], &frame.as_bytes()[..frame_len]);
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_fd_frame_accepts_short_continuation_with_timestamp_enabled() {
+    TestCtx {
+        features: Feature::FD | Feature::HW_TIMESTAMP,
+        timestamp: 0x12345678,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let mut frame =
+            Frame::new(embedded_can::StandardId::new(0x123).unwrap(), &[0; 64]).unwrap();
+        frame.flags = FrameFlag::FD;
+
+        // Linux can omit the host-to-device timestamp, leaving a 12-byte
+        // continuation even when hardware timestamps are enabled.
+        dev.ep_write(&mut cls, 1, &frame.as_bytes()[..64]).unwrap();
+        let mut echoed = [0u8; 128];
+        let result = dev
+            .ep_raw(
+                &mut cls,
+                1,
+                None,
+                Some(&frame.as_bytes()[64..76]),
+                &mut echoed,
+            )
+            .unwrap();
+
+        assert_eq!(result.read, Some(80));
+        assert_eq!(&echoed[..76], &frame.as_bytes()[..76]);
+        assert_eq!(&echoed[76..80], &0x12345678_u32.to_ne_bytes());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_invalid_fd_continuation_is_dropped_and_state_recovers() {
+    TestCtx {
+        features: Feature::FD,
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let mut fd_frame =
+            Frame::new(embedded_can::StandardId::new(0x123).unwrap(), &[0; 64]).unwrap();
+        fd_frame.flags = FrameFlag::FD;
+
+        // The first 64-byte packet starts FD reassembly.
+        dev.ep_write(&mut cls, 1, &fd_frame.as_bytes()[..64])
+            .unwrap();
+        // A valid continuation is 16 bytes; this malformed packet must not
+        // panic or leave the reassembly state stuck.
+        dev.ep_write(&mut cls, 1, &[0; 8]).unwrap();
+
+        let classic =
+            Frame::new(embedded_can::StandardId::new(0x456).unwrap(), &[4, 5, 6]).unwrap();
+        let classic_len = classic.len(false);
+        let mut packet = [0u8; 64];
+        packet[..classic_len].copy_from_slice(&classic.as_bytes()[..classic_len]);
+        let mut echoed = [0u8; 64];
+        let result = dev
+            .ep_raw(&mut cls, 1, None, Some(&packet), &mut echoed)
+            .unwrap();
+        assert_eq!(result.read, Some(classic_len));
+        assert_eq!(&echoed[..classic_len], &classic.as_bytes()[..classic_len]);
     })
     .expect("with_usb");
 }
