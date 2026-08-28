@@ -2,6 +2,8 @@
 
 # [Unreleased]
 
+# v0.2.1
+
 - Fix and validate Windows support.
 
 # v0.2.0
