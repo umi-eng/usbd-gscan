@@ -1,4 +1,5 @@
 use embedded_can::Frame as _;
+use usbd_gscan::errors::Error;
 use usbd_gscan::host::CanBitTimingConst;
 use usbd_gscan::host::CanState;
 use usbd_gscan::host::DeviceBitTiming;
@@ -268,6 +269,16 @@ fn test_invalid_get_state_interface_is_rejected() {
                 64,
             )
             .is_err());
+        assert!(dev
+            .control_read(
+                &mut cls,
+                CtrRequestType::to_host().interface().vendor(),
+                99,
+                0,
+                0,
+                4,
+            )
+            .is_err());
     })
     .expect("with_usb");
 }
@@ -297,6 +308,76 @@ fn test_host_format() {
 }
 
 #[test]
+fn test_invalid_host_format_requests_are_rejected() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let request_type = CtrRequestType::to_device().class().vendor();
+        assert!(dev
+            .control_write(&mut cls, request_type, 0, 0, 0, 0, &[])
+            .is_err());
+        assert!(dev
+            .control_write(&mut cls, request_type, 0, 0, 0, 4, &[0; 4])
+            .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_valid_timing_and_mode_requests() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let request_type = CtrRequestType::to_device().class().vendor();
+        let timing = [1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0];
+
+        dev.control_write(&mut cls, request_type, 1, 0, 0, 20, &timing)
+            .unwrap();
+        dev.control_write(&mut cls, request_type, 10, 0, 0, 20, &timing)
+            .unwrap();
+
+        let reset = [0, 0, 0, 0, 0, 0, 0, 0];
+        dev.control_write(&mut cls, request_type, 2, 0, 0, 8, &reset)
+            .unwrap();
+
+        let start = [1, 0, 0, 0, 0x80, 0x01, 0, 0];
+        dev.control_write(&mut cls, request_type, 2, 0, 0, 8, &start)
+            .unwrap();
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_invalid_timing_and_mode_requests_are_rejected() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let request_type = CtrRequestType::to_device().class().vendor();
+        assert!(dev
+            .control_write(&mut cls, request_type, 1, 0, 0, 4, &[0; 4])
+            .is_err());
+        assert!(dev
+            .control_write(&mut cls, request_type, 10, 0, 0, 4, &[0; 4])
+            .is_err());
+
+        let invalid_mode = [2, 0, 0, 0, 0, 0, 0, 0];
+        assert!(dev
+            .control_write(&mut cls, request_type, 2, 0, 0, 8, &invalid_mode)
+            .is_err());
+        assert!(dev
+            .control_write(&mut cls, request_type, 99, 0, 0, 0, &[])
+            .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
 fn test_invalid_interface_request_is_rejected() {
     TestCtx {
         features: Feature::empty(),
@@ -312,6 +393,28 @@ fn test_invalid_interface_request_is_rejected() {
                 0,
                 8,
                 &[0; 8],
+            )
+            .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_invalid_host_byte_order_is_rejected() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        assert!(dev
+            .control_write(
+                &mut cls,
+                CtrRequestType::to_device().class().vendor(),
+                0,
+                0,
+                0,
+                4,
+                &0xefbe0000_u32.to_le_bytes(),
             )
             .is_err());
     })
@@ -336,6 +439,84 @@ fn test_malformed_mode_request_is_rejected() {
                 &[0; 4],
             )
             .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_transmit_error_emits_error_frame() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        cls.transmit_error(
+            0,
+            Error {
+                tx_timeout: true,
+                no_ack: true,
+                ..Error::default()
+            },
+        );
+
+        let data = dev.ep_read(&mut cls, 1, 64).unwrap();
+        assert_eq!(data.len(), 20);
+        assert_eq!(
+            u32::from_ne_bytes(data[4..8].try_into().unwrap()) & 0x20000000,
+            0x20000000
+        );
+        assert_eq!(data[12], 0);
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_classic_frame_can_be_padded_to_endpoint_size() {
+    TestCtx {
+        features: Feature::PAD_PKTS_TO_MAX_PKT_SIZE,
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        dev.control_write(
+            &mut cls,
+            CtrRequestType::to_device().class().vendor(),
+            2,
+            0,
+            0,
+            8,
+            &[1, 0, 0, 0, 0x80, 0, 0, 0],
+        )
+        .unwrap();
+        let frame = Frame::new(embedded_can::StandardId::new(0x123).unwrap(), &[1, 2, 3]).unwrap();
+        cls.transmit(0, &frame, FrameFlag::empty());
+
+        let data = dev.ep_read(&mut cls, 1, 64).unwrap();
+        assert_eq!(data.len(), 64);
+        assert_eq!(&data[4..8], &frame.can_id.to_le_bytes());
+        assert_eq!(&data[12..15], &[1, 2, 3]);
+        assert_eq!(&data[20..], &[0; 44]);
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_queued_classic_frames_are_sent_in_order() {
+    TestCtx {
+        features: Feature::empty(),
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let first = Frame::new(embedded_can::StandardId::new(0x123).unwrap(), &[1]).unwrap();
+        let second = Frame::new(embedded_can::StandardId::new(0x456).unwrap(), &[2]).unwrap();
+        cls.transmit(0, &first, FrameFlag::empty());
+        cls.transmit(0, &second, FrameFlag::empty());
+
+        let first_data = dev.ep_read(&mut cls, 1, 64).unwrap();
+        assert_eq!(&first_data[4..8], &first.can_id.to_le_bytes());
+        assert_eq!(first_data[12], 1);
+        let second_data = dev.ep_read(&mut cls, 1, 64).unwrap();
+        assert_eq!(&second_data[4..8], &second.can_id.to_le_bytes());
+        assert_eq!(second_data[12], 2);
     })
     .expect("with_usb");
 }
