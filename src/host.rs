@@ -444,6 +444,45 @@ mod tests {
     use embedded_can::StandardId;
 
     #[test]
+    fn mode_try_from_valid_values() {
+        assert!(matches!(Mode::try_from(0), Ok(Mode::Reset)));
+        assert!(matches!(Mode::try_from(1), Ok(Mode::Start)));
+    }
+
+    #[test]
+    fn mode_try_from_invalid_values() {
+        assert!(Mode::try_from(2).is_err());
+        assert!(Mode::try_from(u32::MAX).is_err());
+    }
+
+    #[test]
+    fn device_config_new() {
+        let config = DeviceConfig::new(1);
+        assert_eq!(config.interface_count, 0);
+        assert_eq!(config.software_version, 2);
+        assert_eq!(config.hardware_version, 0);
+
+        let config = DeviceConfig::new(4);
+        assert_eq!(config.interface_count, 3);
+    }
+
+    #[test]
+    #[should_panic]
+    fn device_config_new_zero_interfaces() {
+        DeviceConfig::new(0);
+    }
+
+    #[test]
+    fn can_state_numeric_conversions() {
+        assert_eq!(u32::from(CanState::Active), 0);
+        assert_eq!(u32::from(CanState::Warning), 1);
+        assert_eq!(u32::from(CanState::Passive), 2);
+        assert_eq!(u32::from(CanState::BusOff), 3);
+        assert_eq!(u32::from(CanState::Stopped), 4);
+        assert_eq!(u32::from(CanState::Sleeping), 5);
+    }
+
+    #[test]
     fn frame_new_standard() {
         let data = vec![0x11, 0x22, 0x33];
         let id = StandardId::new(0x123).unwrap();
@@ -517,26 +556,64 @@ mod tests {
     }
 
     #[test]
-    fn test_fd_dlc_to_len() {
-        assert_eq!(fd_dlc_to_len(0).unwrap(), 0);
-        assert_eq!(fd_dlc_to_len(8).unwrap(), 8);
-        assert_eq!(fd_dlc_to_len(9).unwrap(), 12);
-        assert_eq!(fd_dlc_to_len(15).unwrap(), 64);
+    fn test_fd_dlc_to_len_boundaries() {
+        let mappings = [
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
+            (9, 12),
+            (10, 16),
+            (11, 20),
+            (12, 24),
+            (13, 32),
+            (14, 48),
+            (15, 64),
+        ];
+
+        for (dlc, len) in mappings {
+            assert_eq!(fd_dlc_to_len(dlc), Some(len));
+        }
         assert!(fd_dlc_to_len(16).is_none());
     }
 
     #[test]
-    #[should_panic]
-    fn test_fd_len_to_dlc_invalid() {
-        fd_len_to_dlc(65).unwrap();
+    fn test_fd_len_to_dlc_boundaries() {
+        let mappings = [
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
+            (12, 9),
+            (16, 10),
+            (20, 11),
+            (24, 12),
+            (32, 13),
+            (48, 14),
+            (64, 15),
+        ];
+
+        for (len, dlc) in mappings {
+            assert_eq!(fd_len_to_dlc(len), Some(dlc));
+        }
     }
 
     #[test]
-    fn test_fd_len_to_dlc() {
-        assert_eq!(fd_len_to_dlc(0).unwrap(), 0);
-        assert_eq!(fd_len_to_dlc(8).unwrap(), 8);
-        assert_eq!(fd_len_to_dlc(12).unwrap(), 9);
-        assert_eq!(fd_len_to_dlc(64).unwrap(), 15);
-        assert!(fd_len_to_dlc(65).is_none());
+    fn test_fd_len_to_dlc_invalid_lengths() {
+        for len in [
+            9, 10, 11, 13, 15, 17, 19, 21, 23, 25, 31, 33, 47, 49, 63, 65,
+        ] {
+            assert!(fd_len_to_dlc(len).is_none());
+        }
     }
 }

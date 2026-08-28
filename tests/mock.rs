@@ -205,6 +205,74 @@ fn test_timestamp_request_without_feature() {
 }
 
 #[test]
+fn test_control_in_device_information_requests() {
+    TestCtx {
+        features: Feature::FD | Feature::BT_CONST_EXT | Feature::GET_STATE,
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        let request_type = CtrRequestType::to_host().interface().vendor();
+
+        let timing = dev
+            .control_read(&mut cls, request_type, 4, 0, 0, 64)
+            .unwrap();
+        assert_eq!(timing.len(), core::mem::size_of::<DeviceBitTimingConst>());
+        assert_eq!(
+            &timing[0..4],
+            &(Feature::FD | Feature::BT_CONST_EXT | Feature::GET_STATE)
+                .bits()
+                .to_le_bytes()
+        );
+        assert_eq!(&timing[4..8], &80_000_000_u32.to_le_bytes());
+
+        let config = dev
+            .control_read(&mut cls, request_type, 5, 0, 0, 64)
+            .unwrap();
+        assert_eq!(config.len(), core::mem::size_of::<DeviceConfig>());
+        assert_eq!(config[3], 1);
+        assert_eq!(&config[4..8], &2_u32.to_le_bytes());
+        assert_eq!(&config[8..12], &0_u32.to_le_bytes());
+
+        let timing_ext = dev
+            .control_read(&mut cls, request_type, 11, 0, 0, 128)
+            .unwrap();
+        assert_eq!(
+            timing_ext.len(),
+            core::mem::size_of::<DeviceBitTimingConstExtended>()
+        );
+
+        let state = dev
+            .control_read(&mut cls, request_type, 14, 0, 0, 64)
+            .unwrap();
+        assert_eq!(state.len(), core::mem::size_of::<DeviceState>());
+        assert_eq!(&state[0..4], &0_u32.to_le_bytes());
+        assert_eq!(&state[4..12], &[0; 8]);
+    })
+    .expect("with_usb");
+}
+
+#[test]
+fn test_invalid_get_state_interface_is_rejected() {
+    TestCtx {
+        features: Feature::GET_STATE,
+        timestamp: 0,
+    }
+    .with_usb(|mut cls, mut dev| {
+        assert!(dev
+            .control_read(
+                &mut cls,
+                CtrRequestType::to_host().interface().vendor(),
+                14,
+                3,
+                0,
+                64,
+            )
+            .is_err());
+    })
+    .expect("with_usb");
+}
+
+#[test]
 fn test_host_format() {
     TestCtx {
         features: Feature::all(),

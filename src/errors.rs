@@ -221,4 +221,33 @@ mod tests {
             [0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
+
+    #[test]
+    fn test_error_to_frame_with_all_fields() {
+        let error = Error {
+            tx_timeout: true,
+            lost_arbitration: Some(0x01),
+            controller: Some(ControllerError::from_bits_truncate(0x3f)),
+            protocol: Some((
+                ProtocolErrorKind::from_bits_truncate(0xff),
+                ProtocolErrorLocation::AckDel,
+            )),
+            transceiver: Some(TransceiverError::CanLowShortToCanHigh),
+            no_ack: true,
+            bus_error: true,
+            restarted: true,
+            tx_rx_error_count: Some((0x12, 0x34)),
+        };
+        let frame = error.to_err_frame(7);
+
+        assert_eq!(frame.interface, 7);
+        assert_eq!(frame.can_dlc, 8);
+        assert_eq!(frame.echo_id, u32::MAX);
+        assert_eq!(frame.flags.bits(), 0);
+        assert_eq!(frame.can_id, IdFlag::ERROR.bits() | 0x03bf);
+        assert_eq!(
+            unsafe { frame.can_data.classic_can }.data,
+            [0x01, 0x3f, 0xff, 0x1b, 0x80, 0, 0x12, 0x34]
+        );
+    }
 }
